@@ -22,13 +22,14 @@ class UserService:
 
     async def create_user(self, user_in: UserCreate) -> User:
         """Register a new user in the system."""
-        existing_user = await self.user_repo.get_by_email(user_in.email)
+        email_lower = user_in.email.lower().strip()
+        existing_user = await self.user_repo.get_by_email(email_lower)
         if existing_user:
             raise ConflictException(detail="Email already registered")
 
         password_hash = get_password_hash(user_in.password)
         db_user = User(
-            email=user_in.email,
+            email=email_lower,
             name=user_in.name,
             avatar_url=user_in.avatar_url,
             password_hash=password_hash,

@@ -60,6 +60,14 @@ async def get_current_user(
             raise UnauthorizedException(detail=f"Failed to auto-cache Supabase user: {str(e)}")
 
 
+async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency to retrieve the currently authenticated user and assert admin privileges."""
+    if not current_user.is_admin:
+        from app.core.exceptions import ForbiddenException
+        raise ForbiddenException(detail="Insufficient privileges. Admin access required.")
+    return current_user
+
+
 from fastapi import Header
 from app.core.exceptions import BadRequestException
 

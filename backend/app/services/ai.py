@@ -1,5 +1,8 @@
 import uuid
 import re
+import json
+import os
+import httpx
 import hashlib
 import numpy as np
 from datetime import datetime, timedelta, timezone
@@ -7,6 +10,9 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
+import logging
+logger = logging.getLogger(__name__)
+
 from app.core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 from app.db.models.note import Note
 from app.db.models.document import Document, DocumentChunk, Embedding
@@ -71,64 +77,114 @@ class AIService:
         result_fc = await self.db.execute(query_fc)
         return list(result_fc.scalars().all())
 
+    async def _call_gemini_json(self, prompt: str) -> Optional[Any]:
+        """Call Gemini API and parse JSON from the response. Returns None on failure."""
+        from app.core.config import settings
+        gemini_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        gemini_model = settings.GEMINI_MODEL or os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
+        if not gemini_key:
+            return None
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent"
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"}
+        }
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(url, params={"key": gemini_key}, json=payload)
+                if resp.status_code != 200:
+                    return None
+                data = resp.json()
+                raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                # Strip markdown code fences if Gemini wraps in ```json
+                raw_text = re.sub(r'^```(?:json)?\s*', '', raw_text)
+                raw_text = re.sub(r'\s*```$', '', raw_text)
+                return json.loads(raw_text)
+        except Exception:
+            return None
+
+    async def _get_workspace_context(self, workspace_id: uuid.UUID, note_id: uuid.UUID, limit: int = 10) -> str:
+        """Fetch specific document chunk text if note_id represents a document, else fallback to note content."""
+        # Check if this note_id actually represents an ingested Document
+        doc_stmt = select(Document).where(Document.id == note_id, Document.workspace_id == workspace_id)
+        doc_res = await self.db.execute(doc_stmt)
+        doc = doc_res.scalar_one_or_none()
+        
+        if doc:
+            stmt_chunks = (
+                select(DocumentChunk.chunk_text, Document.filename)
+                .join(Document, DocumentChunk.document_id == Document.id)
+                .where(Document.id == note_id)
+                .where(Document.status == "completed")
+                .order_by(DocumentChunk.chunk_index)
+                .limit(limit)
+            )
+            res_chunks = await self.db.execute(stmt_chunks)
+            rows = res_chunks.all()
+            if rows:
+                parts = []
+                for r in rows:
+                    parts.append(f"[{r.filename}]\n{r.chunk_text}")
+                return "\n\n".join(parts)
+
+        # Fallback: note content
+        note_stmt = select(Note).where(Note.id == note_id, Note.workspace_id == workspace_id)
+        res_note = await self.db.execute(note_stmt)
+        note = res_note.scalar_one_or_none()
+        if note and note.content and note.content.strip():
+            return note.content
+        return ""
+
     async def generate_note_flashcards(self, note_id: uuid.UUID, workspace_id: uuid.UUID) -> List[Flashcard]:
-        """Generate flashcards from note/document text content using semantic chunk retrieval."""
-        # Check if we can find associated document chunk text
-        stmt_chunks = (
-            select(DocumentChunk.chunk_text)
-            .join(Document, DocumentChunk.document_id == Document.id)
-            .where(Document.workspace_id == workspace_id)
-            .limit(5)
-        )
-        res_chunks = await self.db.execute(stmt_chunks)
-        chunks = res_chunks.scalars().all()
-        
-        # Fallback to note content if no document chunks exist in workspace
-        context_sources = chunks if chunks else []
-        if not context_sources:
-            note_stmt = select(Note).where(Note.id == note_id, Note.workspace_id == workspace_id)
-            res_note = await self.db.execute(note_stmt)
-            note = res_note.scalar_one_or_none()
-            if note and note.content:
-                context_sources = [note.content]
+        """Generate flashcards from document chunks using Gemini LLM with JSON output."""
+        context = await self._get_workspace_context(workspace_id, note_id, limit=10)
 
-        flashcards = []
-        sentence_regex = re.compile(r'([^.!?]+(?:is|defines|refers to|means)[^.!?]+[.!?])', re.IGNORECASE)
-        
-        for context in context_sources:
-            # Extract sentences that define terms (contains "is", "defines", etc.)
-            definitions = sentence_regex.findall(context)
-            for definition in definitions:
-                def_clean = definition.strip()
-                if len(def_clean) < 30 or len(def_clean) > 250:
-                    continue
-                
-                # Split definition into term and definition parts
-                parts = re.split(r'\s+(?:is|defines|refers to|means)\s+', def_clean, maxsplit=1, flags=re.IGNORECASE)
-                if len(parts) == 2:
-                    term, desc = parts
-                    term = term.strip()
-                    desc = desc.strip().rstrip('.')
-                    
-                    fc = Flashcard(
-                        note_id=note_id,
-                        question=f"What is defined as: '{desc}'?",
-                        answer=term
-                    )
-                    self.db.add(fc)
-                    flashcards.append(fc)
-                    
-                    if len(flashcards) >= 5:  # Cap at 5 flashcards per generation
-                        break
-            if len(flashcards) >= 5:
-                break
+        flashcards: List[Flashcard] = []
 
-        # Fallback if no definitions were parsed
+        if context:
+            prompt = (
+                "You are an expert educational content creator. "
+                "Read the following document content and generate exactly 5 flashcards as a JSON array. "
+                "Each flashcard must have a 'question' and an 'answer' field. "
+                "Questions should test understanding of key concepts, facts, and ideas in the text. "
+                "Answers should be concise (1-3 sentences). "
+                "Return ONLY a JSON array, no extra text.\n\n"
+                f"Document content:\n{context[:4000]}\n\n"
+                "Format: [{\"question\": \"...\", \"answer\": \"...\"}]"
+            )
+            result = await self._call_gemini_json(prompt)
+            if result and isinstance(result, list):
+                for item in result[:5]:
+                    q_text = item.get("question", "").strip()
+                    a_text = item.get("answer", "").strip()
+                    if q_text and a_text:
+                        fc = Flashcard(note_id=note_id, question=q_text, answer=a_text)
+                        self.db.add(fc)
+                        flashcards.append(fc)
+
+        # Fallback if LLM unavailable or returned nothing
+        if not flashcards:
+            if context:
+                # Safe sentence split approach as last resort
+                sentences = re.split(r'[.!?]+', context)
+                for m in sentences:
+                    m = m.strip()
+                    if len(m) < 30 or len(m) > 400:
+                        continue
+                    parts = re.split(r'\s+(?:is|defines|refers to|means)\s+', m, maxsplit=1, flags=re.IGNORECASE)
+                    if len(parts) == 2 and 5 <= len(parts[0].strip()) <= 150:
+                        term, desc = parts[0].strip(), parts[1].strip()
+                        fc = Flashcard(note_id=note_id, question=f"What is '{term}'?", answer=desc)
+                        self.db.add(fc)
+                        flashcards.append(fc)
+                        if len(flashcards) >= 5:
+                            break
+
         if not flashcards:
             fc = Flashcard(
                 note_id=note_id,
-                question="What is the primary topic of this workspace document?",
-                answer="Refer to the document sections for details."
+                question="What is the primary topic of the documents in this workspace?",
+                answer="Upload and process documents to generate content-specific flashcards."
             )
             self.db.add(fc)
             flashcards.append(fc)
@@ -183,71 +239,85 @@ class AIService:
         return list(result_qz.scalars().all())
 
     async def generate_note_quiz(self, note_id: uuid.UUID, workspace_id: uuid.UUID) -> Quiz:
-        """Create a multiple choice quiz dynamically generated using retrieved workspace document chunks."""
-        # 1. Retrieve document chunks
-        stmt_chunks = (
-            select(DocumentChunk.chunk_text, Document.filename)
-            .join(Document, DocumentChunk.document_id == Document.id)
-            .where(Document.workspace_id == workspace_id)
-            .limit(5)
-        )
-        res_chunks = await self.db.execute(stmt_chunks)
-        rows = res_chunks.all()
+        """Create a multiple-choice quiz from workspace document chunks using Gemini LLM with JSON output."""
+        context = await self._get_workspace_context(workspace_id, note_id, limit=10)
 
-        # Fallback to note content
-        context_sources = [{"text": r.chunk_text, "source": r.filename} for r in rows]
-        if not context_sources:
-            note_stmt = select(Note).where(Note.id == note_id, Note.workspace_id == workspace_id)
-            res_note = await self.db.execute(note_stmt)
-            note = res_note.scalar_one_or_none()
-            if note and note.content:
-                context_sources = [{"text": note.content, "source": note.title}]
-
-        quiz = Quiz(note_id=note_id, title=f"Knowledge Quiz")
+        quiz = Quiz(note_id=note_id, title="Knowledge Quiz")
         self.db.add(quiz)
         await self.db.flush()
 
-        sentence_regex = re.compile(r'([^.!?]+(?:is|defines|refers to|means)[^.!?]+[.!?])', re.IGNORECASE)
         question_count = 0
 
-        for item in context_sources:
-            definitions = sentence_regex.findall(item["text"])
-            for definition in definitions:
-                def_clean = definition.strip()
-                parts = re.split(r'\s+(?:is|defines|refers to|means)\s+', def_clean, maxsplit=1, flags=re.IGNORECASE)
-                if len(parts) == 2:
-                    term, desc = parts
-                    term = term.strip()
-                    desc = desc.strip().rstrip('.')
-                    
+        if context:
+            prompt = (
+                "You are an expert quiz creator. "
+                "Read the following document content and generate exactly 3 multiple-choice questions as a JSON array. "
+                "Each question must have: 'question_text' (string), 'choices' (array of 4 strings), "
+                "'correct_answer' (string matching one of the choices exactly), 'explanation' (string). "
+                "Base all questions strictly on facts found in the provided text. "
+                "Return ONLY a JSON array, no extra text.\n\n"
+                f"Document content:\n{context[:4000]}\n\n"
+                "Format: [{\"question_text\": \"...\", \"choices\": [\"A\",\"B\",\"C\",\"D\"], "
+                "\"correct_answer\": \"A\", \"explanation\": \"...\"}]"
+            )
+            result = await self._call_gemini_json(prompt)
+            if result and isinstance(result, list):
+                for item in result[:3]:
+                    q_text = item.get("question_text", "").strip()
+                    choices = item.get("choices", [])
+                    correct = item.get("correct_answer", "").strip()
+                    explanation = item.get("explanation", "").strip()
+                    if q_text and choices and correct:
+                        q = QuizQuestion(
+                            quiz_id=quiz.id,
+                            question_text=q_text,
+                            choices=choices,
+                            correct_answer=correct,
+                            explanation=explanation
+                        )
+                        self.db.add(q)
+                        question_count += 1
+
+        # Fallback: safe sentence split approach if LLM unavailable
+        if question_count == 0 and context:
+            sentences = re.split(r'[.!?]+', context)
+            for m in sentences:
+                m = m.strip()
+                if len(m) < 30 or len(m) > 400:
+                    continue
+                parts = re.split(r'\s+(?:is|defines|refers to|means)\s+', m, maxsplit=1, flags=re.IGNORECASE)
+                if len(parts) == 2 and 5 <= len(parts[0].strip()) <= 150:
+                    term, desc = parts[0].strip(), parts[1].strip()
                     q = QuizQuestion(
                         quiz_id=quiz.id,
-                        question_text=f"According to the document context, what is defined as '{desc}'?",
-                        choices=[term, "An unrelated programming term", "A legacy database engine", "None of the above"],
-                        correct_answer=term,
-                        explanation=f"The document '{item['source']}' states that: '{def_clean}'."
+                        question_text=f"What does '{term}' refer to in the document?",
+                        choices=[desc, "A database migration tool", "A network protocol", "None of the above"],
+                        correct_answer=desc,
+                        explanation=f"The document states: '{m}'"
                     )
                     self.db.add(q)
                     question_count += 1
-                    
                     if question_count >= 3:
                         break
-            if question_count >= 3:
-                break
 
-        # Fallback if no questions could be parsed
+        # Final fallback
         if question_count == 0:
             q = QuizQuestion(
                 quiz_id=quiz.id,
-                question_text="What is the primary role of the RAG ingestion pipeline?",
-                choices=["Extract, chunk, and embed documents", "Build CSS templates", "Run unit test suites", "None of these"],
-                correct_answer="Extract, chunk, and embed documents",
-                explanation="RAG pipelines process files to make their text content semantic searchable."
+                question_text="What is the primary purpose of the documents in this workspace?",
+                choices=[
+                    "To provide knowledge for AI-assisted research",
+                    "To store CSS stylesheets",
+                    "To run automated tests",
+                    "None of the above"
+                ],
+                correct_answer="To provide knowledge for AI-assisted research",
+                explanation="Upload and process documents to generate content-specific quiz questions."
             )
             self.db.add(q)
 
         await self.db.flush()
-        
+
         # Reload with relations
         query_reload = select(Quiz).where(Quiz.id == quiz.id).options(selectinload(Quiz.questions))
         result = await self.db.execute(query_reload)
@@ -281,6 +351,155 @@ class AIService:
             "total_questions": len(quiz.questions),
             "results": results_map
         }
+
+    # =========================================================================
+    # KNOWLEDGE SOURCE GENERATION (context-injected variants)
+    # =========================================================================
+
+    async def generate_flashcards_with_context(self, note_id: uuid.UUID, context: str) -> List[Flashcard]:
+        """Generate flashcards using pre-fetched context text. Used by KnowledgeService endpoints."""
+        flashcards: List[Flashcard] = []
+        logger.info(f"[AUDIT] AI Service - generate_flashcards_with_context called for note_id: {note_id}, context length: {len(context) if context else 0}")
+
+        if context:
+            prompt = (
+                "You are an expert educational content creator. "
+                "Read the following document content and generate exactly 5 flashcards as a JSON array. "
+                "Each flashcard must have a 'question' and an 'answer' field. "
+                "Questions should test understanding of key concepts, facts, and ideas in the text. "
+                "Answers should be concise (1-3 sentences). "
+                "Return ONLY a JSON array, no extra text.\n\n"
+                f"Document content:\n{context[:4000]}\n\n"
+                "Format: [{\"question\": \"...\", \"answer\": \"...\"}]"
+            )
+            result = await self._call_gemini_json(prompt)
+            if result and isinstance(result, list):
+                for item in result[:5]:
+                    q_text = item.get("question", "").strip()
+                    a_text = item.get("answer", "").strip()
+                    if q_text and a_text:
+                        fc = Flashcard(note_id=note_id, question=q_text, answer=a_text)
+                        self.db.add(fc)
+                        flashcards.append(fc)
+            else:
+                logger.warning("[AUDIT] LLM returned empty or invalid response for flashcards")
+
+        # Fallback if LLM unavailable or returned nothing
+        if not flashcards:
+            logger.info("[AUDIT] Falling back to regex extraction for flashcards")
+            if context:
+                sentences = re.split(r'[.!?]+', context)
+                for m in sentences:
+                    m = m.strip()
+                    if len(m) < 30 or len(m) > 400:
+                        continue
+                    parts = re.split(r'\s+(?:is|defines|refers to|means)\s+', m, maxsplit=1, flags=re.IGNORECASE)
+                    if len(parts) == 2 and 5 <= len(parts[0].strip()) <= 150:
+                        term, desc = parts[0].strip(), parts[1].strip()
+                        fc = Flashcard(note_id=note_id, question=f"What is '{term}'?", answer=desc)
+                        self.db.add(fc)
+                        flashcards.append(fc)
+                        if len(flashcards) >= 5:
+                            break
+
+        if not flashcards:
+            fc = Flashcard(
+                note_id=note_id,
+                question="What is the primary topic of this knowledge source?",
+                answer="Add more content to generate context-specific flashcards."
+            )
+            self.db.add(fc)
+            flashcards.append(fc)
+
+        await self.db.flush()
+        return flashcards
+
+    async def generate_quiz_with_context(self, note_id: uuid.UUID, context: str) -> Quiz:
+        """Generate a quiz using pre-fetched context text. Used by KnowledgeService endpoints."""
+        logger.info(f"[AUDIT] AI Service - generate_quiz_with_context called for note_id: {note_id}, context length: {len(context) if context else 0}")
+        quiz = Quiz(note_id=note_id, title="Knowledge Quiz")
+        self.db.add(quiz)
+        await self.db.flush()
+
+        question_count = 0
+
+        if context:
+            prompt = (
+                "You are an expert quiz creator. "
+                "Read the following document content and generate exactly 3 multiple-choice questions as a JSON array. "
+                "Each question must have: 'question_text' (string), 'choices' (array of 4 strings), "
+                "'correct_answer' (string matching one of the choices exactly), 'explanation' (string). "
+                "Base all questions strictly on facts found in the provided text. "
+                "Return ONLY a JSON array, no extra text.\n\n"
+                f"Document content:\n{context[:4000]}\n\n"
+                "Format: [{\"question_text\": \"...\", \"choices\": [\"A\",\"B\",\"C\",\"D\"], "
+                "\"correct_answer\": \"A\", \"explanation\": \"...\"}]"
+            )
+            result = await self._call_gemini_json(prompt)
+            if result and isinstance(result, list):
+                for item in result[:3]:
+                    q_text = item.get("question_text", "").strip()
+                    choices = item.get("choices", [])
+                    correct = item.get("correct_answer", "").strip()
+                    explanation = item.get("explanation", "").strip()
+                    if q_text and choices and correct:
+                        q = QuizQuestion(
+                            quiz_id=quiz.id,
+                            question_text=q_text,
+                            choices=choices,
+                            correct_answer=correct,
+                            explanation=explanation
+                        )
+                        self.db.add(q)
+                        question_count += 1
+            else:
+                logger.warning("[AUDIT] LLM returned empty or invalid response for quizzes")
+
+        # Fallback: safe sentence split approach if LLM unavailable
+        if question_count == 0 and context:
+            logger.info("[AUDIT] Falling back to sentence splitting extraction for quizzes")
+            sentences = re.split(r'[.!?]+', context)
+            for m in sentences:
+                m = m.strip()
+                if len(m) < 30 or len(m) > 400:
+                    continue
+                parts = re.split(r'\s+(?:is|defines|refers to|means)\s+', m, maxsplit=1, flags=re.IGNORECASE)
+                if len(parts) == 2 and 5 <= len(parts[0].strip()) <= 150:
+                    term, desc = parts[0].strip(), parts[1].strip()
+                    q = QuizQuestion(
+                        quiz_id=quiz.id,
+                        question_text=f"What does '{term}' refer to in the source?",
+                        choices=[desc, "A database migration tool", "A network protocol", "None of the above"],
+                        correct_answer=desc,
+                        explanation=f"The source states: '{m}'"
+                    )
+                    self.db.add(q)
+                    question_count += 1
+                    if question_count >= 3:
+                        break
+
+        # Final fallback
+        if question_count == 0:
+            q = QuizQuestion(
+                quiz_id=quiz.id,
+                question_text="What is the primary purpose of this knowledge source?",
+                choices=[
+                    "To provide knowledge for AI-assisted research",
+                    "To store CSS stylesheets",
+                    "To run automated tests",
+                    "None of the above"
+                ],
+                correct_answer="To provide knowledge for AI-assisted research",
+                explanation="Add more content to generate context-specific quiz questions."
+            )
+            self.db.add(q)
+
+        await self.db.flush()
+
+        # Reload with relations
+        query_reload = select(Quiz).where(Quiz.id == quiz.id).options(selectinload(Quiz.questions))
+        result = await self.db.execute(query_reload)
+        return result.scalar_one()
 
     # =========================================================================
     # KNOWLEDGE GRAPH (Semantic Similarity Relations)

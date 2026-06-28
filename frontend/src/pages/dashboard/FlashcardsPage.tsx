@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { apiClient } from "@/lib/api-client";
-import { Note } from "@/types";
+import { useUIStore } from "@/store/ui-store";
+import { useKnowledgeSources } from "@/components/knowledge";
+import { KnowledgeSourcePicker } from "@/components/knowledge";
 import { 
-  Sparkles, Check, HelpCircle, Loader2, RotateCw, 
-  ArrowRight, Award, ChevronRight, BookOpen, Layers
+  Sparkles, Loader2, RotateCw, 
+  Award, Layers
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -19,47 +21,52 @@ interface Flashcard {
   next_review: string;
 }
 
+type SourceType = "note" | "document";
+
 export const FlashcardsPage: React.FC = () => {
   const { activeWorkspaceId } = useWorkspaceStore();
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const { data: sources = [] } = useKnowledgeSources();
+
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [selectedSourceType, setSelectedSourceType] = useState<SourceType | null>(null);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   
   // Loading states
-  const [notesLoading, setNotesLoading] = useState(false);
   const [cardsLoading, setCardsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load workspace notes on mount/workspace change
+  // Reset selected state on workspace switch
   useEffect(() => {
-    const fetchNotes = async () => {
-      setNotesLoading(true);
-      try {
-        const response = await apiClient.get("/notes/");
-        setNotes(response.data);
-        // Reset selected note on workspace switch
-        setSelectedNoteId(null);
-        setFlashcards([]);
-      } catch (err) {
-        console.error("Error fetching notes for flashcards:", err);
-      } finally {
-        setNotesLoading(false);
-      }
-    };
-
-    if (activeWorkspaceId) {
-      fetchNotes();
-    }
+    setSelectedSourceId(null);
+    setSelectedSourceType(null);
+    setFlashcards([]);
+    setCurrentIndex(0);
+    setIsFlipped(false);
   }, [activeWorkspaceId]);
 
-  // Load flashcards for selected note
-  const fetchFlashcards = async (noteId: string) => {
+  // Auto-select active note if navigated from notes page
+  useEffect(() => {
+    if (sources.length > 0) {
+      const activeId = useUIStore.getState().activeNoteId;
+      if (activeId) {
+        const found = sources.find((s) => s.id === activeId);
+        if (found) {
+          setSelectedSourceId(activeId);
+          setSelectedSourceType(found.source_type);
+          fetchFlashcards(found.source_type, activeId);
+        }
+      }
+    }
+  }, [sources]);
+
+  // Load flashcards for selected source using the new unified backend route
+  const fetchFlashcards = async (sourceType: SourceType, sourceId: string) => {
     setCardsLoading(true);
     try {
-      const response = await apiClient.get(`/ai/notes/${noteId}/flashcards`);
+      const response = await apiClient.get(`/knowledge/${sourceType}/${sourceId}/flashcards`);
       setFlashcards(response.data);
       setCurrentIndex(0);
       setIsFlipped(false);
@@ -70,21 +77,45 @@ export const FlashcardsPage: React.FC = () => {
     }
   };
 
-  const handleSelectNote = (noteId: string) => {
-    setSelectedNoteId(noteId);
-    fetchFlashcards(noteId);
+  const handleSelectSource = (id: string, type: SourceType) => {
+    setSelectedSourceId(id);
+    setSelectedSourceType(type);
+    fetchFlashcards(type, id);
   };
 
+  // Keyboard Shortcuts (Space to flip, 1-5 to grade)
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!selectedSourceId || flashcards.length === 0 || currentIndex >= flashcards.length) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === " ") {
+        e.preventDefault();
+        setIsFlipped((prev) => !prev);
+      } else if (["1", "2", "3", "4", "5"].includes(e.key)) {
+        e.preventDefault();
+        const rating = parseInt(e.key);
+        handleReview(rating);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyPress);
+    return () => window.removeEventListener("keydown", handleKeyPress);
+  }, [selectedSourceId, flashcards, currentIndex, isSubmitting]);
+
   const handleGenerateCards = async () => {
-    if (!selectedNoteId) return;
+    if (!selectedSourceId || !selectedSourceType) return;
     setIsGenerating(true);
     try {
-      const response = await apiClient.post(`/ai/notes/${selectedNoteId}/flashcards/generate`);
+      const response = await apiClient.post(`/knowledge/flashcards/generate`, {
+        source_type: selectedSourceType,
+        source_id: selectedSourceId,
+      });
       setFlashcards(response.data);
       setCurrentIndex(0);
       setIsFlipped(false);
     } catch (err) {
-      alert("Failed to auto-generate flashcards. Make sure the note has sufficient context text.");
+      alert("Failed to auto-generate flashcards. Make sure the source has sufficient context text.");
       console.error(err);
     } finally {
       setIsGenerating(false);
@@ -101,7 +132,6 @@ export const FlashcardsPage: React.FC = () => {
       
       // Move to next card
       setIsFlipped(false);
-      // Wait for flip transition before updating index
       setTimeout(() => {
         setCurrentIndex((prev) => prev + 1);
         setIsSubmitting(false);
@@ -113,74 +143,52 @@ export const FlashcardsPage: React.FC = () => {
     }
   };
 
-  const activeNote = notes.find((n) => n.id === selectedNoteId);
+  // Get the display name for the selected source
+  const getSourceName = (): string => {
+    if (!selectedSourceId) return "";
+    const source = sources.find((s) => s.id === selectedSourceId);
+    return source ? source.title : "Unknown Source";
+  };
+
+  const sourceName = getSourceName();
 
   // SuperMemo score descriptors
   const reviews = [
-    { value: 1, label: "Forgot", color: "bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:scale-105 border-red-500/25" },
-    { value: 2, label: "Vague", color: "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 hover:scale-105 border-orange-500/25" },
-    { value: 3, label: "Hard", color: "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 hover:scale-105 border-yellow-500/25" },
-    { value: 4, label: "Good", color: "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 hover:scale-105 border-blue-500/25" },
-    { value: 5, label: "Easy", color: "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 hover:scale-105 border-emerald-500/25" }
+    { value: 1, label: "Forgot", color: "bg-red-500/10 text-red-500 hover:bg-red-500/20 border-red-500/25 dark:text-red-400 dark:bg-red-500/5" },
+    { value: 2, label: "Vague", color: "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 border-orange-500/25 dark:text-orange-400 dark:bg-orange-500/5" },
+    { value: 3, label: "Hard", color: "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 border-yellow-500/25 dark:text-yellow-400 dark:bg-yellow-500/5" },
+    { value: 4, label: "Good", color: "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/25 dark:text-blue-400 dark:bg-blue-500/5" },
+    { value: 5, label: "Easy", color: "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border-emerald-500/25 dark:text-emerald-400 dark:bg-emerald-500/5" }
   ];
 
   return (
-    <div className="h-[calc(100vh-8rem)] grid grid-cols-1 md:grid-cols-4 gap-6">
-      {/* Left Column: Note list selector */}
+    <div className="h-[calc(100vh-8rem)] grid grid-cols-1 md:grid-cols-4 gap-6 text-left animate-fadeIn">
+      {/* Left Column: Knowledge Sources selector */}
       <div className="md:col-span-1 flex flex-col h-full overflow-hidden clay-panel bg-card/10">
-        <div className="p-4 border-b border-border/40 shrink-0">
-          <h3 className="font-bold text-xs uppercase text-muted-foreground/80 tracking-wider">
-            Select Notebook Note
-          </h3>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
-            Choose a note to study spaced flashcards.
-          </p>
-        </div>
-
-        <div className="flex-grow overflow-y-auto p-2 space-y-1 scrollbar">
-          {notesLoading ? (
-            <div className="flex justify-center py-10">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            </div>
-          ) : notes.length === 0 ? (
-            <p className="text-center py-10 text-xs text-muted-foreground">
-              No notes created yet.
-            </p>
-          ) : (
-            notes.map((n) => (
-              <button
-                key={n.id}
-                onClick={() => handleSelectNote(n.id)}
-                className={`w-full text-left p-3 rounded-xl transition-all flex items-center justify-between text-xs font-semibold ${
-                  selectedNoteId === n.id
-                    ? "bg-primary/10 text-primary shadow-sm"
-                    : "hover:bg-muted/40 text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <span className="truncate pr-2">{n.title || "Untitled Note"}</span>
-                <ChevronRight className="h-4 w-4 shrink-0" />
-              </button>
-            ))
-          )}
-        </div>
+        <KnowledgeSourcePicker
+          selectedSourceId={selectedSourceId}
+          onSelect={handleSelectSource}
+        />
       </div>
 
       {/* Right Column: Flashcard Interface */}
       <div className="md:col-span-3 flex flex-col h-full overflow-hidden">
         <AnimatePresence mode="wait">
-          {!selectedNoteId ? (
+          {!selectedSourceId ? (
             <motion.div
-              key="no-note"
+              key="no-source"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-grow flex flex-col items-center justify-center text-center p-8 space-y-3.5 clay-panel h-full"
+              className="flex-grow flex flex-col items-center justify-center text-center p-8 space-y-4 clay-panel h-full"
             >
-              <Layers className="h-10 w-10 text-muted-foreground/50 animate-pulse" />
-              <h3 className="font-bold text-sm">No notebook chosen</h3>
-              <p className="text-xs text-muted-foreground max-w-xs">
-                Select a note from the side panel to generate review flashcards or load current cards.
-              </p>
+              <Layers className="h-12 w-12 text-muted-foreground/45 animate-pulse" />
+              <div>
+                <h3 className="font-extrabold text-sm text-foreground">No source selected</h3>
+                <p className="text-xs text-muted-foreground max-w-xs mt-1 leading-relaxed">
+                  Select a document or note from the Knowledge Sources panel to generate review flashcards.
+                </p>
+              </div>
             </motion.div>
           ) : cardsLoading ? (
             <motion.div
@@ -200,29 +208,33 @@ export const FlashcardsPage: React.FC = () => {
               exit={{ opacity: 0, scale: 0.95 }}
               className="flex-grow flex flex-col items-center justify-center text-center p-8 space-y-4 clay-panel h-full"
             >
-              <div className="h-12 w-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 mb-2 shadow-inner">
+              <div className="h-12 w-12 rounded-2xl bg-violet/10 flex items-center justify-center text-violet mb-2 shadow-inner">
                 <Sparkles className="h-6 w-6" />
               </div>
-              <h3 className="font-bold text-sm">No flashcards found</h3>
-              <p className="text-xs text-muted-foreground max-w-sm">
-                "{activeNote?.title}" does not have flashcards. Generate cards using AI to extract key concepts, definitions, and formulas.
-              </p>
+              <div>
+                <h3 className="font-extrabold text-sm text-foreground">No flashcards found</h3>
+                <p className="text-xs text-muted-foreground max-w-sm mt-1 leading-relaxed">
+                  "{sourceName}" does not have flashcards. Generate cards using AI to extract key concepts, definitions, and formulas.
+                </p>
+              </div>
               
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={handleGenerateCards}
                 disabled={isGenerating}
-                className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold clay-btn-primary disabled:opacity-50"
+                className="flex items-center gap-1.5 px-5 py-3 text-xs font-bold clay-btn-primary disabled:opacity-50"
               >
                 {isGenerating ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Generating Cards...
+                    <Loader2 className="h-4.5 w-4.5 animate-spin" /> Generating Cards...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="h-4 w-4" /> Generate AI Flashcards
+                    <Sparkles className="h-4.5 w-4.5" /> Generate AI Flashcards
                   </>
                 )}
-              </button>
+              </motion.button>
             </motion.div>
           ) : currentIndex >= flashcards.length ? (
             <motion.div
@@ -235,21 +247,27 @@ export const FlashcardsPage: React.FC = () => {
               <div className="h-14 w-14 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 mb-2 shadow-inner border border-emerald-500/20">
                 <Award className="h-8 w-8" />
               </div>
-              <h3 className="font-extrabold text-base">Study Session Complete!</h3>
-              <p className="text-xs text-muted-foreground max-w-sm">
-                Excellent! You have reviewed all {flashcards.length} flashcards for this note. Spaced repetition dates are updated in the database.
-              </p>
+              <div>
+                <h3 className="font-extrabold text-base text-foreground">Study Session Complete!</h3>
+                <p className="text-xs text-muted-foreground max-w-sm mt-1 leading-relaxed">
+                  Excellent! You have reviewed all {flashcards.length} flashcards. Spaced repetition dates are updated in the database.
+                </p>
+              </div>
               <div className="flex gap-2">
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => setCurrentIndex(0)}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold clay-btn bg-card/50"
+                  className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold clay-btn bg-card/50"
                 >
                   <RotateCw className="h-3.5 w-3.5" /> Study Again
-                </button>
-                <button
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={handleGenerateCards}
                   disabled={isGenerating}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold clay-btn-primary"
+                  className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold clay-btn-primary"
                 >
                   {isGenerating ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -257,7 +275,7 @@ export const FlashcardsPage: React.FC = () => {
                     <Sparkles className="h-3.5 w-3.5" />
                   )}
                   Regenerate Cards
-                </button>
+                </motion.button>
               </div>
             </motion.div>
           ) : (
@@ -265,18 +283,21 @@ export const FlashcardsPage: React.FC = () => {
               {/* Header Status */}
               <div className="flex justify-between items-center px-4">
                 <div className="text-left">
-                  <h3 className="font-bold text-sm truncate max-w-md">
-                    Studying: {activeNote?.title}
+                  <h3 className="font-extrabold text-sm truncate max-w-md text-foreground flex items-center gap-2">
+                    <span>{selectedSourceType === "document" ? "📄" : "📝"}</span>
+                    Studying: {sourceName}
                   </h3>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-[10px] text-muted-foreground font-semibold">
                     Card {currentIndex + 1} of {flashcards.length}
                   </span>
                 </div>
                 
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
                   onClick={handleGenerateCards}
                   disabled={isGenerating}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold clay-btn bg-indigo-500/10 text-indigo-500 border-indigo-500/10 hover:bg-indigo-500/20"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold clay-btn bg-violet/10 text-violet border-violet/10 hover:bg-violet/20"
                 >
                   {isGenerating ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -284,7 +305,7 @@ export const FlashcardsPage: React.FC = () => {
                     <RotateCw className="h-3 w-3" />
                   )}
                   Regenerate
-                </button>
+                </motion.button>
               </div>
 
               {/* 3D Flip Card */}
@@ -302,29 +323,29 @@ export const FlashcardsPage: React.FC = () => {
                   >
                     {/* Front of Card */}
                     <div 
-                      className="absolute inset-0 w-full h-full rounded-3xl p-8 flex flex-col justify-center items-center text-center backface-hidden border border-border/40 clay-card bg-card/85"
+                      className="absolute inset-0 w-full h-full rounded-3xl p-8 flex flex-col justify-center items-center text-center border border-border/40 clay-card bg-card/85 shadow-lg"
                       style={{ backfaceVisibility: "hidden" }}
                     >
-                      <span className="absolute top-4 left-4 p-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 text-[9px] font-bold uppercase tracking-wider">
+                      <span className="absolute top-4 left-4 p-1.5 rounded-lg bg-violet/10 text-violet text-[9px] font-extrabold uppercase tracking-wider">
                         Question
                       </span>
                       <p className="font-extrabold text-sm text-foreground max-w-md leading-relaxed">
                         {flashcards[currentIndex].question}
                       </p>
-                      <span className="absolute bottom-4 text-[10px] text-muted-foreground flex items-center gap-1">
-                        <RotateCw className="h-3 w-3 animate-pulse" /> Click card to flip and reveal answer
+                      <span className="absolute bottom-4 text-[10px] text-muted-foreground flex items-center gap-1 font-semibold">
+                        <RotateCw className="h-3 w-3 animate-pulse text-primary" /> Click card to flip and reveal answer
                       </span>
                     </div>
 
                     {/* Back of Card */}
                     <div 
-                      className="absolute inset-0 w-full h-full rounded-3xl p-8 flex flex-col justify-center items-center text-center backface-hidden border border-border/40 clay-card bg-card/90"
+                      className="absolute inset-0 w-full h-full rounded-3xl p-8 flex flex-col justify-center items-center text-center border border-border/40 clay-card bg-card/90 shadow-lg"
                       style={{ 
                         backfaceVisibility: "hidden", 
                         transform: "rotateY(180deg)" 
                       }}
                     >
-                      <span className="absolute top-4 left-4 p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 text-[9px] font-bold uppercase tracking-wider">
+                      <span className="absolute top-4 left-4 p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 text-[9px] font-extrabold uppercase tracking-wider">
                         Answer
                       </span>
                       <p className="font-bold text-xs text-foreground max-w-md leading-relaxed whitespace-pre-wrap">
@@ -338,20 +359,22 @@ export const FlashcardsPage: React.FC = () => {
               {/* Review Buttons Controls panel */}
               <div className="clay-panel p-4 border border-border/40 bg-card/40 shrink-0">
                 <div className="flex flex-col items-center gap-3">
-                  <h4 className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                  <h4 className="text-[10px] uppercase font-extrabold text-muted-foreground tracking-wider">
                     How well did you recall this card?
                   </h4>
                   
                   <div className="flex flex-wrap justify-center gap-2.5 w-full">
                     {reviews.map((rev) => (
-                      <button
+                      <motion.button
                         key={rev.value}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
                         onClick={() => handleReview(rev.value)}
                         disabled={isSubmitting}
-                        className={`flex-grow md:flex-grow-0 px-4 py-2 text-xs font-semibold rounded-xl border transition-all clay-btn ${rev.color}`}
+                        className={`flex-grow md:flex-grow-0 px-4 py-2.5 text-xs font-bold rounded-xl border transition-all clay-btn ${rev.color}`}
                       >
                         {rev.value} - {rev.label}
-                      </button>
+                      </motion.button>
                     ))}
                   </div>
                 </div>

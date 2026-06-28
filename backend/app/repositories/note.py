@@ -29,7 +29,14 @@ class NoteRepository(BaseRepository[Note]):
         is_favorite: Optional[bool] = None,
     ) -> List[Note]:
         """Get all notes in a workspace, filtered by folder, tags, or favorites."""
-        query = select(Note).where(Note.workspace_id == workspace_id).options(selectinload(Note.tags))
+        from app.db.models.document import Document
+        
+        query = (
+            select(Note)
+            .where(Note.workspace_id == workspace_id)
+            .where(~Note.id.in_(select(Document.id)))
+            .options(selectinload(Note.tags))
+        )
 
         if folder_id is not None:
             query = query.where(Note.folder_id == folder_id)

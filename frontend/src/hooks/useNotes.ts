@@ -51,6 +51,7 @@ export const useCreateNote = () => {
     },
     onSuccess: (newNote) => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] });
       queryClient.setQueryData(["notes", newNote.id], newNote);
     },
   });
@@ -76,6 +77,7 @@ export const useUpdateNote = () => {
     },
     onSuccess: (updatedNote) => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] });
       queryClient.setQueryData(["notes", updatedNote.id], updatedNote);
     },
   });
@@ -90,6 +92,7 @@ export const useDeleteNote = () => {
     },
     onSuccess: (_, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] });
       queryClient.removeQueries({ queryKey: ["notes", deletedId] });
     },
   });
@@ -104,6 +107,7 @@ export const useDuplicateNote = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] });
     },
   });
 };
@@ -119,6 +123,7 @@ export const useSetNoteTags = () => {
     },
     onSuccess: (updatedNote) => {
       queryClient.invalidateQueries({ queryKey: ["notes"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] });
       queryClient.setQueryData(["notes", updatedNote.id], updatedNote);
     },
   });

@@ -7,10 +7,12 @@ from pydantic import BaseModel, Field
 class MessageCreate(BaseModel):
     content: str = Field(..., min_length=1)
     document_ids: Optional[List[uuid.UUID]] = None
+    note_ids: Optional[List[uuid.UUID]] = None
     file_types: Optional[List[str]] = None
     date_start: Optional[datetime] = None
     date_end: Optional[datetime] = None
     stream: Optional[bool] = False
+
 
 
 class MessageResponse(BaseModel):

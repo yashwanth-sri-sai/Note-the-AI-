@@ -13,6 +13,7 @@ export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const { isAuthenticated, isLoading } = useAuthStore();
+  console.log("[ProtectedRoute] render:", { isAuthenticated, isLoading });
 
   if (isLoading) {
     return (

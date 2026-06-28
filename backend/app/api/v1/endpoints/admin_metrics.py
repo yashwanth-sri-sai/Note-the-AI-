@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, get_admin_user
 from app.db.models.user import User
 from app.db.models.metrics import APIRequestLog, LatencyMetric
 from app.db.models.extensions import AIRequest, TokenUsage
@@ -51,7 +51,7 @@ def _aggregate_for_period(rows, period: str) -> Dict[str, Any]:
 @router.get("/usage")
 async def get_usage_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ) -> Dict[str, Any]:
     """Return Daily, Weekly, and Monthly request count and endpoint usage aggregates."""
     result = await db.execute(
@@ -83,7 +83,7 @@ async def get_usage_metrics(
 @router.get("/tokens")
 async def get_token_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ) -> Dict[str, Any]:
     """Return Daily, Weekly, and Monthly token consumption and estimated cost aggregates."""
     result = await db.execute(
@@ -123,7 +123,7 @@ async def get_token_metrics(
 @router.get("/latency")
 async def get_latency_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ) -> Dict[str, Any]:
     """Return Daily, Weekly, and Monthly mean/p95/p99 latency percentiles for all tracked points."""
     result = await db.execute(
@@ -166,7 +166,7 @@ async def get_latency_metrics(
 @router.get("/failures")
 async def get_failure_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ) -> Dict[str, Any]:
     """Return Daily, Weekly, and Monthly success/failure rates and top error messages."""
     result = await db.execute(

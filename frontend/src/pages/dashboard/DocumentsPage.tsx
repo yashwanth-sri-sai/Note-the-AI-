@@ -1,26 +1,21 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useWorkspaceStore } from "@/store/workspace-store";
-import { apiClient } from "@/lib/api-client";
 import { 
   FileText, Upload, Trash2, Loader2, RefreshCw, CheckCircle2, 
-  AlertCircle, Clock, FileDown, Plus
+  AlertCircle, Clock, FileDown, Plus, Info, Sparkles, X, ChevronRight, HelpCircle, ArrowRight
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-
-interface DocumentItem {
-  id: string;
-  filename: string;
-  file_size: number;
-  content_type: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  created_at: string;
-}
+import { useUIStore } from "@/store/ui-store";
+import { useDocuments, useUploadDocument, useDeleteDocument, DocumentItem } from "@/hooks/useDocuments";
 
 export const DocumentsPage: React.FC = () => {
   const { activeWorkspaceId } = useWorkspaceStore();
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { data: documents = [], isLoading } = useDocuments();
+  const { mutateAsync: uploadDoc } = useUploadDocument();
+  const { mutateAsync: deleteDoc } = useDeleteDocument();
+
   const [isDragging, setIsDragging] = useState(false);
+  const [activeDocPreview, setActiveDocPreview] = useState<DocumentItem | null>(null);
   const [uploadStatus, setUploadStatus] = useState<{
     status: "idle" | "uploading" | "processing" | "completed" | "failed";
     message?: string;
@@ -29,41 +24,21 @@ export const DocumentsPage: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchDocuments = async (silent = false) => {
-    if (!silent) setIsLoading(true);
-    try {
-      const response = await apiClient.get("/documents/");
-      setDocuments(response.data);
-    } catch (error) {
-      console.error("Error fetching documents:", error);
-    } finally {
-      if (!silent) setIsLoading(false);
-    }
-  };
-
+  // Synchronize uploadStatus with newly uploaded document processing success/failure
   useEffect(() => {
-    if (activeWorkspaceId) {
-      fetchDocuments();
+    if (uploadStatus.status === "processing" && uploadStatus.progressFilename) {
+      const activeDoc = documents.find((d: DocumentItem) => d.filename === uploadStatus.progressFilename);
+      if (activeDoc) {
+        if (activeDoc.status === "completed") {
+          setUploadStatus({ status: "completed", message: "Document processed successfully!" });
+          setTimeout(() => setUploadStatus({ status: "idle" }), 3000);
+        } else if (activeDoc.status === "failed") {
+          setUploadStatus({ status: "failed", message: "Failed to extract or embed document contents." });
+          setTimeout(() => setUploadStatus({ status: "idle" }), 4000);
+        }
+      }
     }
-  }, [activeWorkspaceId]);
-
-  // Polling for processing documents
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-    const hasProcessingDocs = documents.some(
-      (doc) => doc.status === "pending" || doc.status === "processing"
-    );
-
-    if (hasProcessingDocs) {
-      intervalId = setInterval(() => {
-        fetchDocuments(true);
-      }, 3000);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [documents]);
+  }, [documents, uploadStatus]);
 
   const handleUploadFile = async (file: File) => {
     if (!file) return;
@@ -73,65 +48,13 @@ export const DocumentsPage: React.FC = () => {
       progressFilename: file.name
     });
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      const response = await apiClient.post("/documents/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-
-      const newDoc = response.data;
+      await uploadDoc(file);
       setUploadStatus({ 
         status: "processing", 
         message: "Processing and indexing vectors...",
         progressFilename: file.name
       });
-      
-      // Instantly add doc to local list to show pending badge
-      setDocuments((prev) => [newDoc, ...prev]);
-
-      // Simple local checker for completion status
-      const checkDocStatus = async () => {
-        try {
-          const docsResp = await apiClient.get("/documents/");
-          const matchingDoc = docsResp.data.find((d: DocumentItem) => d.id === newDoc.id);
-          if (matchingDoc) {
-            if (matchingDoc.status === "completed") {
-              setUploadStatus({ status: "completed", message: "Document processed successfully!" });
-              fetchDocuments(true);
-              setTimeout(() => setUploadStatus({ status: "idle" }), 3000);
-              return true;
-            } else if (matchingDoc.status === "failed") {
-              setUploadStatus({ status: "failed", message: "Failed to extract or embed document contents." });
-              fetchDocuments(true);
-              setTimeout(() => setUploadStatus({ status: "idle" }), 4000);
-              return true;
-            }
-          }
-          return false;
-        } catch (err) {
-          console.error("Error checking upload completion status:", err);
-          return true;
-        }
-      };
-
-      // Poll every 2 seconds for this specific document status
-      let pollCount = 0;
-      const pollInterval = setInterval(async () => {
-        pollCount++;
-        const isDone = await checkDocStatus();
-        if (isDone || pollCount > 30) {
-          clearInterval(pollInterval);
-          if (pollCount > 30 && !isDone) {
-            setUploadStatus({ status: "failed", message: "Timeout during indexing." });
-            setTimeout(() => setUploadStatus({ status: "idle" }), 4000);
-          }
-        }
-      }, 2000);
-
     } catch (error: any) {
       console.error("Upload error:", error);
       setUploadStatus({ 
@@ -164,8 +87,7 @@ export const DocumentsPage: React.FC = () => {
     e.stopPropagation();
     if (!confirm("Delete this document? All embedded vectors and RAG citations will be permanently removed.")) return;
     try {
-      await apiClient.delete(`/documents/${id}`);
-      setDocuments((prev) => prev.filter((d) => d.id !== id));
+      await deleteDoc(id);
     } catch (error) {
       alert("Failed to delete document.");
       console.error(error);
@@ -181,35 +103,42 @@ export const DocumentsPage: React.FC = () => {
   };
 
   const getFileIcon = (contentType: string) => {
-    if (contentType.includes("pdf")) return <FileText className="h-8 w-8 text-red-500" />;
-    if (contentType.includes("word") || contentType.includes("officedocument")) return <FileText className="h-8 w-8 text-blue-500" />;
-    if (contentType.includes("markdown") || contentType.includes("md")) return <FileText className="h-8 w-8 text-emerald-500" />;
-    return <FileText className="h-8 w-8 text-muted-foreground" />;
+    if (contentType.includes("pdf")) return <FileText className="h-7 w-7 text-red-500" />;
+    if (contentType.includes("word") || contentType.includes("officedocument")) return <FileText className="h-7 w-7 text-blue-500" />;
+    if (contentType.includes("markdown") || contentType.includes("md")) return <FileText className="h-7 w-7 text-emerald-500" />;
+    return <FileText className="h-7 w-7 text-muted-foreground" />;
+  };
+
+  const getDocClayCardClass = (contentType: string) => {
+    if (contentType.includes("pdf")) return "clay-card-rose";
+    if (contentType.includes("word") || contentType.includes("officedocument")) return "clay-card-sky";
+    if (contentType.includes("markdown") || contentType.includes("md")) return "clay-card-emerald";
+    return "clay-card-indigo";
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
         return (
-          <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shadow-sm">
+          <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shadow-sm">
             <CheckCircle2 className="h-3 w-3" /> Ready
           </span>
         );
       case "processing":
         return (
-          <span className="flex items-center gap-1 text-[10px] font-semibold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 shadow-sm animate-pulse">
+          <span className="flex items-center gap-1 text-[9px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 shadow-sm animate-pulse">
             <Loader2 className="h-3 w-3 animate-spin" /> Chunking...
           </span>
         );
       case "pending":
         return (
-          <span className="flex items-center gap-1 text-[10px] font-semibold text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-full border border-yellow-500/20 shadow-sm">
+          <span className="flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 shadow-sm">
             <Clock className="h-3 w-3 animate-bounce" /> Enqueued
           </span>
         );
       case "failed":
         return (
-          <span className="flex items-center gap-1 text-[10px] font-semibold text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20 shadow-sm">
+          <span className="flex items-center gap-1 text-[9px] font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20 shadow-sm">
             <AlertCircle className="h-3 w-3" /> Failed
           </span>
         );
@@ -218,36 +147,99 @@ export const DocumentsPage: React.FC = () => {
     }
   };
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.05 }
+    }
+  } as const;
+
+  const itemVariants = {
+    hidden: { opacity: 0, scale: 0.95, y: 15 },
+    show: { opacity: 1, scale: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 23 } }
+  } as const;
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDragging(true);
+      }}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        setIsDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setIsDragging(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) {
+          handleUploadFile(file);
+        }
+      }}
+      className="space-y-6 max-w-6xl mx-auto text-left relative min-h-[calc(100vh-12rem)]"
+    >
+      {/* Full screen Drag Overlay */}
+      <AnimatePresence>
+        {isDragging && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-3xl border-4 border-dashed border-primary bg-background/95 backdrop-blur-md shadow-2xl p-8 text-center pointer-events-none"
+          >
+            <div className="p-6 rounded-full bg-primary/10 text-primary mb-4 animate-bounce">
+              <Upload className="h-10 w-10" />
+            </div>
+            <h3 className="text-lg font-black text-foreground">Drop files to upload</h3>
+            <p className="text-xs text-muted-foreground mt-2 max-w-xs leading-relaxed">
+              Drop your PDF, DOCX, TXT, or Markdown file anywhere on this screen to instantly upload and index it.
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="flex justify-between items-center px-1">
         <div>
-          <h2 className="text-xl font-bold tracking-tight">Documents Library</h2>
+          <h2 className="text-xl font-extrabold tracking-tight md:text-2xl bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">
+            Documents Library
+          </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             Manage your knowledge sources for Cited RAG Chat processing.
           </p>
         </div>
-        <button
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={() => fetchDocuments(false)}
-          className="p-2 text-muted-foreground hover:text-foreground clay-btn bg-card/50"
+          className="p-2.5 text-muted-foreground hover:text-foreground clay-btn bg-card/45"
           title="Refresh List"
         >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin text-primary" : ""}`} />
-        </button>
+          <RefreshCw className={`h-4.5 w-4.5 ${isLoading ? "animate-spin text-primary" : ""}`} />
+        </motion.button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Upload Panel */}
         <div className="lg:col-span-1 space-y-4">
-          <div
+          <motion.div
+            whileHover={{ scale: 1.01 }}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className={`clay-card p-6 flex flex-col items-center justify-center text-center cursor-pointer border-2 border-dashed aspect-video lg:aspect-auto lg:h-[280px] transition-all ${
+            className={`clay-card p-6 flex flex-col items-center justify-center text-center cursor-pointer border-2 border-dashed aspect-video lg:aspect-auto lg:h-[280px] transition-all duration-300 ${
               isDragging
-                ? "border-primary bg-primary/5 scale-95 shadow-lg"
-                : "border-border hover:border-primary/50"
+                ? "border-primary bg-primary/10 scale-95 shadow-xl"
+                : "border-border/60 hover:border-primary/50"
             }`}
           >
             <input
@@ -261,19 +253,27 @@ export const DocumentsPage: React.FC = () => {
               accept=".pdf,.docx,.txt,.md"
             />
             
-            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-3 shadow-inner">
+            <motion.div 
+              animate={isDragging ? { y: [-5, 5, -5] } : {}}
+              transition={{ repeat: Infinity, duration: 1.5 }}
+              className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-3 shadow-inner"
+            >
               <Upload className="h-6 w-6" />
-            </div>
+            </motion.div>
             
-            <h3 className="font-bold text-sm">Drag & Drop Document</h3>
-            <p className="text-[10px] text-muted-foreground mt-1 max-w-[200px]">
+            <h3 className="font-extrabold text-sm text-foreground">Drag & Drop Document</h3>
+            <p className="text-[10px] text-muted-foreground mt-1.5 max-w-[200px] leading-normal">
               Supports PDF, DOCX, TXT or Markdown files up to 10MB
             </p>
             
-            <button className="mt-4 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold clay-btn bg-primary text-white">
+            <motion.button 
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="mt-4 flex items-center gap-1.5 px-4 py-2 text-xs font-bold clay-btn bg-primary text-white"
+            >
               <Plus className="h-3.5 w-3.5" /> Choose File
-            </button>
-          </div>
+            </motion.button>
+          </motion.div>
 
           {/* Active Upload Status Feedback */}
           <AnimatePresence mode="wait">
@@ -282,21 +282,116 @@ export const DocumentsPage: React.FC = () => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="clay-panel p-4 flex gap-3 items-center border border-border bg-card/60"
+                className="clay-panel p-4 flex flex-col gap-3.5 border border-border/30 bg-card/65 shadow-lg"
               >
-                <div className="shrink-0">
-                  {uploadStatus.status === "uploading" && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
-                  {uploadStatus.status === "processing" && <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />}
-                  {uploadStatus.status === "completed" && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
-                  {uploadStatus.status === "failed" && <AlertCircle className="h-5 w-5 text-red-500" />}
+                <div className="flex gap-3 items-center">
+                  <div className="shrink-0">
+                    {uploadStatus.status === "uploading" && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+                    {uploadStatus.status === "processing" && <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />}
+                    {uploadStatus.status === "completed" && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
+                    {uploadStatus.status === "failed" && <AlertCircle className="h-5 w-5 text-red-500" />}
+                  </div>
+                  <div className="min-w-0 flex-grow text-left">
+                    <h4 className="font-bold text-xs truncate text-foreground">
+                      {uploadStatus.progressFilename || "Processing..."}
+                    </h4>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
+                      {uploadStatus.message}
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0 flex-grow">
-                  <h4 className="font-bold text-xs truncate">
-                    {uploadStatus.progressFilename || "Processing..."}
-                  </h4>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {uploadStatus.message}
-                  </p>
+
+                {/* Progress Stepper */}
+                <div className="flex items-center justify-between gap-3 px-1 pt-2 border-t border-border/10">
+                  {/* Step 1: Upload */}
+                  <motion.div
+                    initial={{ opacity: 0.6, scale: 0.95 }}
+                    animate={{
+                      opacity: 1,
+                      scale: uploadStatus.status === "uploading" ? 1.05 : 1,
+                    }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    className="flex flex-col items-center gap-1 flex-1"
+                  >
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center border transition-all ${
+                      uploadStatus.status === "uploading"
+                        ? "bg-primary/20 border-primary text-primary"
+                        : "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
+                    }`}>
+                      {uploadStatus.status === "uploading" ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      )}
+                    </div>
+                    <span className={`text-[9px] font-bold ${
+                      uploadStatus.status === "uploading" ? "text-primary" : "text-emerald-500"
+                    }`}>Upload</span>
+                  </motion.div>
+
+                  <div className="h-[2px] bg-border/20 flex-grow max-w-[20px] -mt-3" />
+
+                  {/* Step 2: Extract */}
+                  <motion.div
+                    initial={{ opacity: 0.6, scale: 0.95 }}
+                    animate={{
+                      opacity: 1,
+                      scale: uploadStatus.status === "processing" ? 1.05 : 1,
+                    }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    className="flex flex-col items-center gap-1 flex-1"
+                  >
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center border transition-all ${
+                      uploadStatus.status === "uploading" ? "bg-muted/10 border-border text-muted-foreground/40" :
+                      uploadStatus.status === "processing" ? "bg-indigo-500/20 border-indigo-500 text-indigo-500 animate-pulse" :
+                      uploadStatus.status === "completed" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500" :
+                      "bg-red-500/10 border-red-500/30 text-red-500"
+                    }`}>
+                      {uploadStatus.status === "uploading" ? (
+                        <Clock className="h-3 w-3 text-muted-foreground/30" />
+                      ) : uploadStatus.status === "processing" ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : uploadStatus.status === "completed" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      ) : (
+                        <AlertCircle className="h-3.5 w-3.5" />
+                      )}
+                    </div>
+                    <span className={`text-[9px] font-bold ${
+                      uploadStatus.status === "uploading" ? "text-muted-foreground/40" :
+                      uploadStatus.status === "processing" ? "text-indigo-500" :
+                      uploadStatus.status === "completed" ? "text-emerald-500" : "text-red-500"
+                    }`}>Extract</span>
+                  </motion.div>
+
+                  <div className="h-[2px] bg-border/20 flex-grow max-w-[20px] -mt-3" />
+
+                  {/* Step 3: Vector Index */}
+                  <motion.div
+                    initial={{ opacity: 0.6, scale: 0.95 }}
+                    animate={{
+                      opacity: 1,
+                      scale: uploadStatus.status === "completed" ? 1.05 : 1,
+                    }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    className="flex flex-col items-center gap-1 flex-1"
+                  >
+                    <div className={`h-6 w-6 rounded-full flex items-center justify-center border transition-all ${
+                      uploadStatus.status === "completed" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500" :
+                      uploadStatus.status === "processing" ? "bg-indigo-500/10 border-indigo-500/25 text-indigo-500/70" :
+                      "bg-muted/10 border-border text-muted-foreground/30"
+                    }`}>
+                      {uploadStatus.status === "completed" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      ) : (
+                        <Sparkles className="h-3 w-3" />
+                      )}
+                    </div>
+                    <span className={`text-[9px] font-bold ${
+                      uploadStatus.status === "completed" ? "text-emerald-500" :
+                      uploadStatus.status === "processing" ? "text-indigo-500/70" : "text-muted-foreground/30"
+                    }`}>Vector Index</span>
+                  </motion.div>
                 </div>
               </motion.div>
             )}
@@ -310,61 +405,188 @@ export const DocumentsPage: React.FC = () => {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : documents.length === 0 ? (
-            <div className="clay-panel p-8 text-center h-[280px] flex flex-col justify-center items-center space-y-2.5">
-              <FileDown className="h-8 w-8 text-muted-foreground/40" />
-              <h3 className="font-bold text-sm">No documents uploaded</h3>
-              <p className="text-xs text-muted-foreground max-w-xs">
+            <motion.div 
+              initial={{ scale: 0.98, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="clay-panel p-8 text-center h-[280px] flex flex-col justify-center items-center space-y-2.5"
+            >
+              <FileDown className="h-8 w-8 text-muted-foreground/35" />
+              <h3 className="font-extrabold text-sm text-foreground">No documents uploaded</h3>
+              <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">
                 Upload files to this workspace, and they will be indexed automatically for RAG QA extraction.
               </p>
-            </div>
+            </motion.div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <motion.div 
+              variants={containerVariants}
+              initial="hidden"
+              animate="show"
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+            >
               <AnimatePresence>
-                {documents.map((doc) => (
-                  <motion.div
-                    key={doc.id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    className="clay-card p-4 flex flex-col justify-between hover:border-border/80"
-                  >
-                    <div className="flex gap-3.5 items-start">
-                      <div className="shrink-0 p-2.5 rounded-xl bg-card/60 border border-border/20 shadow-inner">
-                        {getFileIcon(doc.content_type)}
+                {documents.map((doc) => {
+                  const isCompleted = doc.status === "completed";
+                  return (
+                    <motion.div
+                      key={doc.id}
+                      variants={itemVariants}
+                      layout
+                      whileHover={isCompleted ? { y: -3, scale: 1.01 } : {}}
+                      onClick={() => isCompleted && setActiveDocPreview(doc)}
+                      className={`clay-card ${getDocClayCardClass(doc.content_type)} p-4.5 flex flex-col justify-between cursor-pointer`}
+                    >
+                      <div className="flex gap-3.5 items-start">
+                        <div className="shrink-0 p-2 rounded-xl bg-card/70 border border-border/20 shadow-inner">
+                          {getFileIcon(doc.content_type)}
+                        </div>
+                        <div className="min-w-0 flex-grow text-left">
+                          <h4 className="font-bold text-xs truncate leading-snug text-foreground" title={doc.filename}>
+                            {doc.filename}
+                          </h4>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {formatSize(doc.file_size)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-grow">
-                        <h4 className="font-bold text-xs truncate leading-snug" title={doc.filename}>
-                          {doc.filename}
-                        </h4>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          {formatSize(doc.file_size)}
-                        </p>
-                      </div>
-                    </div>
 
-                    <div className="flex justify-between items-center mt-4 pt-3 border-t border-border/20">
-                      <div>
-                        {getStatusBadge(doc.status)}
+                      <div className="flex justify-between items-center mt-4 pt-3 border-t border-border/10">
+                        <div>
+                          {getStatusBadge(doc.status)}
+                        </div>
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground/80 font-bold">
+                          <span>{new Date(doc.created_at).toLocaleDateString()}</span>
+                          <motion.button
+                            whileHover={{ scale: 1.1, rotate: 5 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={(e) => { e.stopPropagation(); handleDelete(doc.id, e); }}
+                            className="ml-2.5 p-1.5 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
+                            title="Delete source"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </motion.button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground font-semibold">
-                        <span>{new Date(doc.created_at).toLocaleDateString()}</span>
-                        <button
-                          onClick={(e) => handleDelete(doc.id, e)}
-                          className="ml-2 p-1.5 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-500/5 transition-colors"
-                          title="Delete source"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </AnimatePresence>
-            </div>
+            </motion.div>
           )}
         </div>
       </div>
-    </div>
+
+      {/* Right details slide out panel */}
+      <AnimatePresence>
+        {activeDocPreview && (
+          <motion.div
+            initial={{ x: "100%", opacity: 0.9 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: "100%", opacity: 0.9 }}
+            transition={{ type: "spring", stiffness: 350, damping: 30 }}
+            className="fixed right-0 top-0 bottom-0 w-[420px] bg-card/95 backdrop-blur-xl border-l border-border/80 shadow-2xl z-50 p-6 flex flex-col justify-between overflow-hidden text-left"
+          >
+            <div className="space-y-6 flex-grow overflow-y-auto pr-1 scrollbar">
+              {/* Drawer Header */}
+              <div className="flex justify-between items-center pb-4 border-b border-border/40 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Info className="h-4.5 w-4.5 text-primary" />
+                  <h3 className="font-extrabold text-xs uppercase tracking-wider text-muted-foreground">
+                    Document Source Insights
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setActiveDocPreview(null)}
+                  className="p-1.5 text-muted-foreground hover:text-foreground rounded-xl hover:bg-muted/50 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Document Overview Metadata */}
+              <div className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-border/10 space-y-3 shadow-inner">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-card border border-border/40 shadow-sm shrink-0">
+                    {getFileIcon(activeDocPreview.content_type)}
+                  </div>
+                  <div className="min-w-0 flex-grow">
+                    <h4 className="font-extrabold text-xs text-foreground break-all leading-normal" title={activeDocPreview.filename}>
+                      {activeDocPreview.filename}
+                    </h4>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {formatSize(activeDocPreview.file_size)} • {activeDocPreview.content_type}
+                    </p>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-border/10 flex justify-between items-center text-[10px] font-bold text-muted-foreground">
+                  <span>Uploaded {new Date(activeDocPreview.created_at).toLocaleDateString()}</span>
+                  <span>{getStatusBadge(activeDocPreview.status)}</span>
+                </div>
+              </div>
+
+              {/* Dynamic Insights / Summary */}
+              <div className="space-y-2.5 text-left">
+                <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                  AI Document Insights
+                </h4>
+                <div className="p-4 rounded-2xl border border-border/50 bg-card/45 shadow-sm text-xs text-muted-foreground leading-relaxed space-y-3">
+                  <p>
+                    This document has been fully parsed, chunked, and vectorized in your active workspace database. It is ready for cited RAG search queries.
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] font-medium text-foreground/90">
+                    <li>Supports semantic query similarity mapping.</li>
+                    <li>Automatic extraction of document headers and pages.</li>
+                    <li>Citations link directly back to verified sections.</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Suggested Questions */}
+              <div className="space-y-3 text-left">
+                <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1.5">
+                  <HelpCircle className="h-3.5 w-3.5 text-indigo-500" />
+                  Suggested AI Prompts
+                </h4>
+                
+                <div className="space-y-2">
+                  {[
+                    `Summarize the core arguments in "${activeDocPreview.filename}".`,
+                    `What are the main findings or methodology discussed in "${activeDocPreview.filename}"?`,
+                    `Identify any data constraints or caveats in "${activeDocPreview.filename}".`
+                  ].map((prompt, idx) => (
+                    <motion.button
+                      key={idx}
+                      whileHover={{ x: 2, scale: 1.01 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        useUIStore.getState().setPendingAIQuery(prompt);
+                        useUIStore.getState().setActiveTab("chat");
+                        setActiveDocPreview(null);
+                      }}
+                      className="w-full text-left p-3.5 rounded-xl border border-border/70 bg-card hover:border-primary/50 hover:bg-primary/5 transition-all text-xs font-bold text-foreground flex items-center justify-between group shadow-sm"
+                    >
+                      <span className="truncate pr-3 group-hover:text-primary transition-colors">"{prompt}"</span>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 group-hover:text-primary transition-colors" />
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-border/40 shrink-0 flex justify-end">
+              <button
+                onClick={() => {
+                  useUIStore.getState().setActiveTab("chat");
+                  setActiveDocPreview(null);
+                }}
+                className="w-full text-center py-2.5 rounded-xl clay-btn-primary text-xs font-bold text-white shadow-md flex items-center justify-center gap-1.5"
+              >
+                Ask AI Questions in Chat <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 };

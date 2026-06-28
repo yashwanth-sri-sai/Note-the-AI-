@@ -18,8 +18,9 @@ class EmbeddingProvider(Protocol):
 
 class GeminiEmbeddingProvider:
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        self.model = os.getenv("GEMINI_EMBEDDING_MODEL", "text-embedding-004")
+        from app.core.config import settings
+        self.api_key = api_key or settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.model = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-2")
         self.url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:embedContent"
 
     async def get_embedding(self, text: str) -> List[float]:
@@ -148,8 +149,9 @@ class LocalEmbeddingProvider:
 
 def get_embedding_provider() -> EmbeddingProvider:
     """Factory helper to load active provider based on environment variables."""
+    from app.core.config import settings
     openai_key = os.getenv("OPENAI_API_KEY")
-    gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    gemini_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     
     if openai_key:
         return OpenAIEmbeddingProvider(openai_key)

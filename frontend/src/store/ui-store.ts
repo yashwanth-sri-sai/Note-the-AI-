@@ -20,15 +20,20 @@ interface UIState {
   activeFolderId: string | null;
   activeTagId: string | null;
   activeNoteId: string | null;
+  pendingAIQuery: string | null;
+  isFocusMode: boolean;
 
   toggleTheme: () => void;
   setTheme: (theme: "light" | "dark") => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
+  toggleFocusMode: () => void;
+  setFocusMode: (focused: boolean) => void;
   setActiveTab: (tab: DashboardTab) => void;
   setActiveFolderId: (id: string | null) => void;
   setActiveTagId: (id: string | null) => void;
   setActiveNoteId: (id: string | null) => void;
+  setPendingAIQuery: (query: string | null) => void;
   resetFilters: () => void;
 }
 
@@ -57,6 +62,8 @@ export const useUIStore = create<UIState>((set) => {
     activeFolderId: null,
     activeTagId: null,
     activeNoteId: null,
+    pendingAIQuery: null,
+    isFocusMode: false,
 
     toggleTheme: () =>
       set((state) => {
@@ -86,11 +93,15 @@ export const useUIStore = create<UIState>((set) => {
 
     setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
 
+    toggleFocusMode: () => set((state) => ({ isFocusMode: !state.isFocusMode })),
+
+    setFocusMode: (focused) => set({ isFocusMode: focused }),
+
     setActiveTab: (tab) =>
       set(() => {
-        // Clear active note or filter when switching tab to keep state clean
+        // Clear active note or filter when switching tab to keep state clean, EXCEPT for tabs that reference active note
         const updates: Partial<UIState> = { activeTab: tab };
-        if (tab !== "notes") {
+        if (tab !== "notes" && tab !== "flashcards" && tab !== "quizzes" && tab !== "chat") {
           updates.activeNoteId = null;
         }
         return updates;
@@ -103,6 +114,8 @@ export const useUIStore = create<UIState>((set) => {
       set({ activeTagId: id, activeFolderId: null, activeTab: "notes" }), // Filter notes by tag and switch to notes view
 
     setActiveNoteId: (id) => set({ activeNoteId: id, activeTab: "notes" }),
+
+    setPendingAIQuery: (query) => set({ pendingAIQuery: query }),
 
     resetFilters: () => set({ activeFolderId: null, activeTagId: null }),
   };

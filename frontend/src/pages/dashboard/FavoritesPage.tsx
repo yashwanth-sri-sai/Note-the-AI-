@@ -2,6 +2,7 @@ import React from "react";
 import { useNotes, useUpdateNote } from "@/hooks/useNotes";
 import { useUIStore } from "@/store/ui-store";
 import { Star, FileText, ArrowRight } from "lucide-react";
+import { getNotePreview } from "@/lib/utils";
 
 export const FavoritesPage: React.FC = () => {
   const { data: notes, isLoading } = useNotes({ isFavorite: true });
@@ -78,7 +79,7 @@ export const FavoritesPage: React.FC = () => {
                     {note.title || "Untitled Note"}
                   </h3>
                   <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                    {note.content || "Empty content..."}
+                    {getNotePreview(note.content, 100) || "Empty content..."}
                   </p>
                 </div>
               </div>

@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db, get_current_workspace_id
-from app.api.middlewares.rate_limiter import rate_limit_search
+from app.api.middlewares.rate_limiter import limiter
 from app.db.models.user import User
 from app.schemas.note import NoteResponse
 from app.schemas.ai import (
@@ -26,13 +26,13 @@ router = APIRouter()
 
 
 @router.post("/search", response_model=List[NoteResponse])
+@limiter.limit("60/minute")
 async def semantic_search(
     request: Request,
     payload: AISearchRequest,
     current_user: User = Depends(get_current_user),
     workspace_id: UUID = Depends(get_current_workspace_id),
     db: AsyncSession = Depends(get_db),
-    _rate_limit: None = Depends(rate_limit_search),
 ):
     """Perform a fuzzy semantic text search across notes inside the active workspace."""
     import time
@@ -91,13 +91,13 @@ async def semantic_search(
 
 
 @router.post("/retrieve-debug", response_model=RetrievalDebugResponse)
+@limiter.limit("60/minute")
 async def retrieve_debug(
     request: Request,
     payload: AISearchRequest,
     current_user: User = Depends(get_current_user),
     workspace_id: UUID = Depends(get_current_workspace_id),
     db: AsyncSession = Depends(get_db),
-    _rate_limit: None = Depends(rate_limit_search),
 ):
     """Debug retrieval engine, returning cosine similarity scores, character offsets, and token budget analytics."""
     import time

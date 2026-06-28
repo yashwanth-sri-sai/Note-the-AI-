@@ -53,3 +53,23 @@ export interface Note {
   updated_at: string;
   tags: Tag[];
 }
+
+export type SourceType = "note" | "document";
+
+export interface KnowledgeSource {
+  id: string;
+  source_type: SourceType;
+  title: string;
+  status: "pending" | "processing" | "completed" | "failed" | "ready";
+  created_at: string;
+  updated_at: string;
+  metadata: {
+    file_size?: number;
+    content_type?: string;
+    word_count?: number;
+    is_favorite?: boolean;
+    folder_id?: string | null;
+    [key: string]: any;
+  };
+}
+

@@ -8,10 +8,17 @@ export const apiClient = axios.create({
   },
 });
 
-let accessToken: string | null = null;
+let accessToken: string | null = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
 export const setAccessToken = (token: string | null) => {
   accessToken = token;
+  if (typeof window !== "undefined") {
+    if (token) {
+      localStorage.setItem("access_token", token);
+    } else {
+      localStorage.removeItem("access_token");
+    }
+  }
 };
 
 export const getAccessToken = () => accessToken;
@@ -40,26 +47,35 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    console.log("[api-client] Intercepted error response:", {
+      url: originalRequest?.url,
+      status: error.response?.status,
+      _retry: originalRequest?._retry,
+    });
 
     // Check if error is 401 and not already retried
     if (
       error.response?.status === 401 &&
+      originalRequest &&
       !originalRequest._retry &&
       originalRequest.url !== "/auth/refresh" &&
       originalRequest.url !== "/auth/login" &&
       originalRequest.url !== "/auth/register"
     ) {
+      console.log("[api-client] Attempting token refresh...");
       originalRequest._retry = true;
       try {
         const response = await apiClient.post("/auth/refresh");
         const token = response.data.access_token;
+        console.log("[api-client] Token refresh succeeded, new token:", token);
 
         setAccessToken(token);
 
         // Retry the original request with new token
         originalRequest.headers.Authorization = `Bearer ${token}`;
         return apiClient(originalRequest);
-      } catch (refreshError) {
+      } catch (refreshError: any) {
+        console.log("[api-client] Token refresh failed:", refreshError.response?.status || refreshError.message);
         setAccessToken(null);
         // Trigger a custom event to notify listeners (like AuthContext) that user is logged out
         window.dispatchEvent(new Event("auth-logout"));

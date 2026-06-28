@@ -28,6 +28,9 @@ class AuthService:
         if not user:
             raise UnauthorizedException(detail="Incorrect email or password")
 
+        if user.locked_until and user.locked_until > datetime.now(timezone.utc):
+            raise UnauthorizedException(detail="Account is temporarily locked due to too many failed attempts")
+
         if user.provider != "local":
             raise BadRequestException(
                 detail=f"Please sign in using your OAuth provider ({user.provider})"
@@ -36,7 +39,18 @@ class AuthService:
         if not user.password_hash or not verify_password(
             password, user.password_hash
         ):
+            # Increment failed login attempts
+            user.failed_login_attempts += 1
+            if user.failed_login_attempts >= 5:
+                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+            await self.user_repo.update(user, {})
             raise UnauthorizedException(detail="Incorrect email or password")
+
+        # Reset failed login attempts on success
+        if user.failed_login_attempts > 0 or user.locked_until:
+            user.failed_login_attempts = 0
+            user.locked_until = None
+            await self.user_repo.update(user, {})
 
         return user
 
@@ -51,8 +65,8 @@ class AuthService:
         )
         return token
 
-    async def refresh_access_token(self, refresh_token: str) -> str:
-        """Issue a new access token if the refresh token is valid."""
+    async def refresh_access_token(self, refresh_token: str) -> Tuple[str, str]:
+        """Issue a new access token and a new refresh token (rotation)."""
         db_token = await self.token_repo.get_by_token(refresh_token)
 
         if not db_token or db_token.is_revoked:
@@ -66,9 +80,14 @@ class AuthService:
         if expires_at < datetime.now(timezone.utc):
             raise UnauthorizedException(detail="Expired refresh token")
 
-        # Generate new access token
+        # Revoke the old refresh token
+        await self.token_repo.revoke_token(refresh_token)
+
+        # Generate new tokens
         access_token = create_access_token(subject=db_token.user_id)
-        return access_token
+        new_refresh_token = await self.create_user_refresh_token(db_token.user_id)
+        
+        return access_token, new_refresh_token
 
     async def revoke_token(self, refresh_token: str) -> None:
         """Revoke a refresh token."""
@@ -119,7 +138,8 @@ class AuthService:
         # Verify Client ID aud if configured (skip for mock/test credentials)
         aud = payload.get("aud")
         if (
-            settings.GOOGLE_CLIENT_ID
+            not is_dummy
+            and settings.GOOGLE_CLIENT_ID
             and "dummy" not in settings.GOOGLE_CLIENT_ID
             and aud != settings.GOOGLE_CLIENT_ID
         ):

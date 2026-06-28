@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     # Sentry DSN
     SENTRY_DSN: str = ""
 
+    # Gemini Configurations
+    GEMINI_API_KEY: Union[str, None] = None
+    GEMINI_MODEL: str = "gemini-2.5-flash-lite"
+
 
 
 settings = Settings()

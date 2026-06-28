@@ -2,20 +2,15 @@ import React, { useState, useEffect, useRef } from "react";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { apiClient, getAccessToken } from "@/lib/api-client";
 import {
-  BrainCircuit, Plus, Loader2, Calendar, Filter, Upload, X,
-  MessageSquare, AlertTriangle, CheckCircle2, Send, FileText,
+  BrainCircuit, Plus, Loader2, Filter, Upload, X,
+  AlertTriangle, CheckCircle2, Send, FileText,
   Sparkles, History, User, File, ExternalLink, ChevronRight,
-  HelpCircle, CheckSquare, Square, Trash2, Check, RefreshCw
+  CheckSquare, Square, Trash2, BookOpen
 } from "lucide-react";
-
-interface DocumentItem {
-  id: string;
-  filename: string;
-  file_size: number;
-  content_type: string;
-  status: string;
-  created_at: string;
-}
+import { useUIStore } from "@/store/ui-store";
+import { motion, AnimatePresence } from "framer-motion";
+import { useUploadDocument, useDeleteDocument } from "@/hooks/useDocuments";
+import { useKnowledgeSources } from "@/components/knowledge";
 
 interface ConversationItem {
   id: string;
@@ -67,10 +62,18 @@ export const NotebookLMChat: React.FC = () => {
   const [isConversationsLoading, setIsConversationsLoading] = useState(false);
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
 
-  // Documents & Filters States
-  const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [isDocumentsLoading, setIsDocumentsLoading] = useState(false);
+  // Knowledge Sources & Filters States
+  const { data: sources = [], isLoading: isSourcesLoading } = useKnowledgeSources();
+  const { mutateAsync: uploadDoc } = useUploadDocument();
+  const { mutateAsync: deleteDoc } = useDeleteDocument();
+
+  // Group into documents and notes
+  const documents = sources.filter((s) => s.source_type === "document");
+  const notes = sources.filter((s) => s.source_type === "note");
+  const isDocumentsLoading = isSourcesLoading;
+
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [selectedFileTypes, setSelectedFileTypes] = useState<string[]>([]);
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
@@ -92,6 +95,7 @@ export const NotebookLMChat: React.FC = () => {
 
   // Selected Citation Modal Preview
   const [activeCitationPreview, setActiveCitationPreview] = useState<ChatReference | null>(null);
+  const [hoveredCitation, setHoveredCitation] = useState<{ ref: any; rect: DOMRect } | null>(null);
 
   // Scroll ref for chat
   const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -106,11 +110,20 @@ export const NotebookLMChat: React.FC = () => {
     scrollToBottom();
   }, [messages, streamedText]);
 
+  // Trigger pending query if set in global store
+  const { pendingAIQuery, setPendingAIQuery } = useUIStore();
+
+  useEffect(() => {
+    if (pendingAIQuery) {
+      handleSendMessage(pendingAIQuery);
+      setPendingAIQuery(null);
+    }
+  }, [pendingAIQuery]);
+
   // Load everything on workspace switch
   useEffect(() => {
     if (activeWorkspaceId) {
       fetchConversations();
-      fetchDocuments();
       // Reset current active conversation
       setActiveConversationId(null);
       setMessages([]);
@@ -126,35 +139,28 @@ export const NotebookLMChat: React.FC = () => {
     }
   }, [activeConversationId]);
 
-  // Polling logic for document processing job
+  // Synchronize uploadProgress status with background document status
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-    if (processingJobId) {
-      setUploadProgress("processing");
-      intervalId = setInterval(async () => {
-        try {
-          const response = await apiClient.get(`/documents/jobs/${processingJobId}`);
-          const job = response.data;
-          if (job.status === "completed") {
-            setUploadProgress("completed");
-            setProcessingJobId(null);
-            fetchDocuments(); // Refresh documents list
-            setTimeout(() => setUploadProgress(null), 3000);
-          } else if (job.status === "failed") {
-            setUploadProgress("failed");
-            setUploadError(job.error_message || "Document processing pipeline failed.");
-            setProcessingJobId(null);
-            setTimeout(() => setUploadProgress(null), 5000);
-          }
-        } catch (error) {
-          console.error("Error polling processing job:", error);
+    if (uploadProgress === "processing" && uploadFile) {
+      const activeDoc = documents.find((d) => d.title === uploadFile.name);
+      if (activeDoc) {
+        if (activeDoc.status === "completed") {
+          setUploadProgress("completed");
+          setTimeout(() => {
+            setUploadProgress(null);
+            setUploadFile(null);
+          }, 3000);
+        } else if (activeDoc.status === "failed") {
+          setUploadProgress("failed");
+          setUploadError("Text extraction or embedding generation failed.");
+          setTimeout(() => {
+            setUploadProgress(null);
+            setUploadFile(null);
+          }, 5000);
         }
-      }, 2000);
+      }
     }
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [processingJobId]);
+  }, [documents, uploadProgress, uploadFile]);
 
   // API Call: Get Conversations
   const fetchConversations = async () => {
@@ -182,18 +188,7 @@ export const NotebookLMChat: React.FC = () => {
     }
   };
 
-  // API Call: Get Documents
-  const fetchDocuments = async () => {
-    setIsDocumentsLoading(true);
-    try {
-      const response = await apiClient.get("/documents/");
-      setDocuments(response.data);
-    } catch (error) {
-      console.error("Error fetching documents:", error);
-    } finally {
-      setIsDocumentsLoading(false);
-    }
-  };
+
 
   // API Call: Create Conversation
   const handleCreateConversation = async () => {
@@ -214,10 +209,9 @@ export const NotebookLMChat: React.FC = () => {
     e.stopPropagation();
     if (!confirm("Are you sure you want to permanently delete this document and all its indexed vector chunks?")) return;
     try {
-      await apiClient.delete(`/documents/${docId}`);
+      await deleteDoc(docId);
       // Remove from selection if it was checked
       setSelectedDocIds((prev) => prev.filter((id) => id !== docId));
-      fetchDocuments();
     } catch (error) {
       alert("Failed to delete document.");
       console.error(error);
@@ -232,77 +226,17 @@ export const NotebookLMChat: React.FC = () => {
     setUploadProgress("uploading");
     setUploadError(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
-      const response = await apiClient.post("/documents/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-      // Retrieve the DocumentResponse back. We need to poll the job.
-      // In our backend, the upload endpoint returns the document directly, and the job gets enqueued.
-      // Wait, let's check how we get the job ID.
-      // In documents.py upload_document, it creates a ProcessingJob and runs pipeline in background.
-      // Wait, the API returns the Document object: `doc`. Let's poll for any pending job on this doc or query job state?
-      // Wait! How do we find the processing job ID if upload returns doc but not the job ID?
-      // Let's check `backend/app/api/v1/endpoints/documents.py` lines 160-183:
-      // It creates job = ProcessingJob(document_id=doc.id) and returns doc.
-      // So doc has status="pending". We can query the processing status of the document directly or fetch the job.
-      // Wait! We can poll the document details or poll the job associated with document.
-      // Let's check if there is an endpoint to poll the document or we can just fetch all documents again to check status.
-      // Ah! Let's check if the document response model or database supports document status check.
-      // Yes! `DocumentResponse` has `status` ("pending", "processing", "completed", "failed").
-      // So instead of polling a job ID directly (since the upload API returns the `Document` object and not the `ProcessingJob`),
-      // we can simply poll the list of documents, or add a simple custom hook to check this document's status, or fetch all documents.
-      // Let's check: does `documents.py` have a GET `/documents/jobs/{job_id}`? Yes, it has:
-      // `@router.get("/jobs/{job_id}", response_model=ProcessingJobResponse)`
-      // But how do we know the job_id? Wait, we can fetch all documents and see if the document status has changed to completed!
-      // Polling `GET /documents/` is super easy and lightweight!
-      // Let's modify our polling to poll `GET /documents/` every 2 seconds, checking if our uploaded document's status becomes "completed" or "failed".
-      // That is extremely robust and does not require knowing the job ID!
-      
-      const doc = response.data;
-      const uploadedDocId = doc.id;
-      
-      // Let's poll documents list to track status of this document
+      await uploadDoc(file);
       setUploadProgress("processing");
-      const intervalId = setInterval(async () => {
-        try {
-          const docsResp = await apiClient.get("/documents/");
-          const currentDocs = docsResp.data;
-          setDocuments(currentDocs);
-          
-          const matchingDoc = currentDocs.find((d: any) => d.id === uploadedDocId);
-          if (matchingDoc) {
-            if (matchingDoc.status === "completed") {
-              setUploadProgress("completed");
-              clearInterval(intervalId);
-              setTimeout(() => setUploadProgress(null), 3000);
-            } else if (matchingDoc.status === "failed") {
-              setUploadProgress("failed");
-              setUploadError("Text extraction or embedding generation failed.");
-              clearInterval(intervalId);
-              setTimeout(() => setUploadProgress(null), 5000);
-            }
-          } else {
-            // Not found in list? Stop polling
-            clearInterval(intervalId);
-            setUploadProgress(null);
-          }
-        } catch (err) {
-          console.error("Error polling doc status:", err);
-          clearInterval(intervalId);
-          setUploadProgress(null);
-        }
-      }, 2000);
-
     } catch (error: any) {
+      console.error("Upload error:", error);
       setUploadProgress("failed");
-      setUploadError(error.response?.data?.detail || "Upload request failed.");
-      console.error(error);
-      setTimeout(() => setUploadProgress(null), 5000);
+      setUploadError(error.response?.data?.detail || "Upload failed. Verify size and format.");
+      setTimeout(() => {
+        setUploadProgress(null);
+        setUploadFile(null);
+      }, 5000);
     }
   };
 
@@ -376,6 +310,7 @@ export const NotebookLMChat: React.FC = () => {
         body: JSON.stringify({
           content: finalQuery,
           document_ids: selectedDocIds.length > 0 ? selectedDocIds : undefined,
+          note_ids: selectedNoteIds.length > 0 ? selectedNoteIds : undefined,
           file_types: selectedFileTypes.length > 0 ? selectedFileTypes : undefined,
           date_start: dateStart ? new Date(dateStart).toISOString() : undefined,
           date_end: dateEnd ? new Date(dateEnd).toISOString() : undefined,
@@ -526,6 +461,23 @@ export const NotebookLMChat: React.FC = () => {
     }
   };
 
+  // Checkbox Note toggle handler
+  const handleToggleNote = (noteId: string) => {
+    setSelectedNoteIds((prev) =>
+      prev.includes(noteId) ? prev.filter((id) => id !== noteId) : [...prev, noteId]
+    );
+  };
+
+  // Toggle All Notes in selection
+  const handleToggleAllNotes = () => {
+    const activeNotes = notes.map((n) => n.id);
+    if (selectedNoteIds.length === activeNotes.length) {
+      setSelectedNoteIds([]);
+    } else {
+      setSelectedNoteIds(activeNotes);
+    }
+  };
+
   // Toggle file extension filter tags
   const handleToggleFileType = (ext: string) => {
     setSelectedFileTypes((prev) =>
@@ -557,7 +509,12 @@ export const NotebookLMChat: React.FC = () => {
                 <button
                   key={idx}
                   onClick={() => setActiveCitationPreview(ref)}
-                  className="mx-0.5 inline-flex h-4.5 items-center justify-center rounded bg-indigo-500/25 px-1.5 py-0.5 text-[10px] font-extrabold text-indigo-400 hover:bg-indigo-500/40 border border-indigo-500/20 active:scale-95 transition-all shadow-sm align-middle"
+                  onMouseEnter={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHoveredCitation({ ref, rect });
+                  }}
+                  onMouseLeave={() => setHoveredCitation(null)}
+                  className="mx-0.5 inline-flex h-4.5 items-center justify-center rounded bg-primary/25 px-1.5 py-0.5 text-[10px] font-extrabold text-primary hover:bg-primary/40 border border-primary/20 active:scale-95 transition-all shadow-sm align-middle cursor-pointer"
                   title={`${ref.document_name} - Page ${ref.page_number || "N/A"}`}
                 >
                   {indexNum}
@@ -603,21 +560,23 @@ export const NotebookLMChat: React.FC = () => {
       <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-border/80 flex flex-col bg-card/25 backdrop-blur-lg shrink-0">
         
         {/* Document Sources Header */}
-        <div className="p-4 border-b border-border/50 flex items-center justify-between">
+        <div className="p-4 border-b border-border/50 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
-            <FileText className="h-4.5 w-4.5 text-indigo-500" />
+            <FileText className="h-4.5 w-4.5 text-primary" />
             <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground/90">
               Source Documents
             </h3>
           </div>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1 text-[10px] font-bold text-primary hover:underline"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-primary/20 bg-primary/5 text-[10px] font-bold text-primary transition-all shadow-sm"
             title="Upload Document"
           >
             <Upload className="h-3.5 w-3.5" />
             Upload
-          </button>
+          </motion.button>
           <input
             type="file"
             ref={fileInputRef}
@@ -629,17 +588,17 @@ export const NotebookLMChat: React.FC = () => {
 
         {/* Upload & Processing Status Bar */}
         {uploadProgress && (
-          <div className="mx-4 mt-3 p-3 rounded-xl bg-card border border-border/70 flex items-center gap-3 animate-fadeIn">
+          <div className="mx-4 mt-3 p-3 rounded-2xl bg-card border border-border/70 flex items-center gap-3 animate-fadeIn shadow-sm">
             {uploadProgress === "uploading" && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-            {uploadProgress === "processing" && <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />}
+            {uploadProgress === "processing" && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
             {uploadProgress === "completed" && <CheckCircle2 className="h-4 w-4 text-green-500" />}
             {uploadProgress === "failed" && <AlertTriangle className="h-4 w-4 text-red-500" />}
             
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-bold truncate">
+            <div className="flex-1 min-w-0 text-left">
+              <p className="text-[11px] font-bold truncate text-foreground">
                 {uploadFile?.name || "Processing File"}
               </p>
-              <p className="text-[9px] text-muted-foreground uppercase font-semibold mt-0.5">
+              <p className="text-[9px] text-muted-foreground uppercase font-bold mt-0.5">
                 {uploadProgress === "uploading" && "Uploading to storage..."}
                 {uploadProgress === "processing" && "Vectorizing & Chunking..."}
                 {uploadProgress === "completed" && "Successfully indexed!"}
@@ -651,7 +610,7 @@ export const NotebookLMChat: React.FC = () => {
 
         {/* Upload Error Banner */}
         {uploadError && (
-          <div className="mx-4 mt-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-medium leading-relaxed">
+          <div className="mx-4 mt-3 p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-bold leading-relaxed text-left">
             {uploadError}
           </div>
         )}
@@ -660,8 +619,8 @@ export const NotebookLMChat: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar">
           
           <div className="space-y-2">
-            <div className="flex justify-between items-center text-[10px] font-semibold text-muted-foreground">
-              <span>ACTIVE SOURCES ({selectedDocIds.length}/{documents.filter(d => d.status === "completed").length})</span>
+            <div className="flex justify-between items-center text-[10px] font-extrabold text-muted-foreground">
+              <span>ACTIVE DOCUMENTS ({selectedDocIds.length}/{documents.filter(d => d.status === "completed").length})</span>
               {documents.filter(d => d.status === "completed").length > 0 && (
                 <button
                   onClick={handleToggleAllDocs}
@@ -682,7 +641,7 @@ export const NotebookLMChat: React.FC = () => {
                 <p>No documents uploaded yet in this workspace.</p>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="text-primary font-semibold hover:underline mt-1 flex items-center gap-1"
+                  className="text-primary font-bold hover:underline mt-1 flex items-center gap-1"
                 >
                   Upload your first file <Plus className="h-3 w-3" />
                 </button>
@@ -692,15 +651,18 @@ export const NotebookLMChat: React.FC = () => {
                 {documents.map((doc) => {
                   const isCompleted = doc.status === "completed";
                   const isSelected = selectedDocIds.includes(doc.id);
+                  const fileSize = doc.metadata.file_size || 0;
+                  const contentType = doc.metadata.content_type || "text/plain";
                   return (
-                    <div
+                    <motion.div
                       key={doc.id}
+                      whileHover={isCompleted ? { x: 2 } : {}}
                       onClick={() => isCompleted && handleToggleDoc(doc.id)}
-                      className={`group flex items-center justify-between p-2.5 rounded-xl border border-border/60 hover:border-primary/40 cursor-pointer transition-all ${
+                      className={`group flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-primary/40 cursor-pointer transition-all ${
                         isSelected ? "bg-primary/5 border-primary/20" : "bg-card/45 hover:bg-muted/15"
                       } ${!isCompleted ? "opacity-60 cursor-not-allowed" : ""}`}
                     >
-                      <div className="flex items-center gap-2.5 truncate flex-grow">
+                      <div className="flex items-center gap-2.5 truncate flex-grow text-left">
                         {isCompleted ? (
                           isSelected ? (
                             <CheckSquare className="h-4 w-4 text-primary shrink-0" />
@@ -708,14 +670,14 @@ export const NotebookLMChat: React.FC = () => {
                             <Square className="h-4 w-4 text-muted-foreground shrink-0" />
                           )
                         ) : (
-                          <Loader2 className="h-4 w-4 animate-spin text-indigo-500 shrink-0" />
+                          <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
                         )}
-                        <div className="truncate text-left">
-                          <p className="font-semibold text-xs truncate max-w-[160px] group-hover:text-primary transition-colors" title={doc.filename}>
-                            {doc.filename}
+                        <div className="truncate">
+                          <p className="font-semibold text-xs truncate max-w-[160px] group-hover:text-primary transition-colors text-foreground" title={doc.title}>
+                            {doc.title}
                           </p>
                           <p className="text-[9px] text-muted-foreground uppercase font-bold mt-0.5">
-                            {formatBytes(doc.file_size)} • {doc.content_type.split("/")[1] || doc.content_type.split(".")[1] || "DOC"}
+                            {formatBytes(fileSize)} • {contentType.split("/")[1] || contentType.split(".")[1] || "DOC"}
                           </p>
                         </div>
                       </div>
@@ -727,7 +689,61 @@ export const NotebookLMChat: React.FC = () => {
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                    </div>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Notes Checklist Area */}
+          <div className="space-y-2 border-t border-border/50 pt-4">
+            <div className="flex justify-between items-center text-[10px] font-extrabold text-muted-foreground">
+              <span>ACTIVE NOTES ({selectedNoteIds.length}/{notes.length})</span>
+              {notes.length > 0 && (
+                <button
+                  onClick={handleToggleAllNotes}
+                  className="hover:text-primary transition-colors text-[10px] font-bold"
+                >
+                  {selectedNoteIds.length === notes.length ? "Deselect All" : "Select All"}
+                </button>
+              )}
+            </div>
+
+            {notes.length === 0 ? (
+              <p className="text-center text-xs text-muted-foreground py-2">
+                No notes available in this workspace.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {notes.map((note) => {
+                  const isSelected = selectedNoteIds.includes(note.id);
+                  const wordCount = note.metadata.word_count || 0;
+                  return (
+                    <motion.div
+                      key={note.id}
+                      whileHover={{ x: 2 }}
+                      onClick={() => handleToggleNote(note.id)}
+                      className={`group flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-primary/40 cursor-pointer transition-all ${
+                        isSelected ? "bg-primary/5 border-primary/20" : "bg-card/45 hover:bg-muted/15"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 truncate flex-grow text-left">
+                        {isSelected ? (
+                          <CheckSquare className="h-4 w-4 text-primary shrink-0" />
+                        ) : (
+                          <Square className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
+                        <div className="truncate">
+                          <p className="font-semibold text-xs truncate max-w-[160px] group-hover:text-primary transition-colors text-foreground" title={note.title}>
+                            {note.title}
+                          </p>
+                          <p className="text-[9px] text-muted-foreground uppercase font-bold mt-0.5">
+                            {wordCount} words • Note
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
                   );
                 })}
               </div>
@@ -763,7 +779,7 @@ export const NotebookLMChat: React.FC = () => {
                         <button
                           key={type.val}
                           onClick={() => handleToggleFileType(type.val)}
-                          className={`px-2 py-1 text-[10px] font-bold rounded-lg border transition-all ${
+                          className={`px-2.5 py-1 text-[10px] font-bold rounded-lg border transition-all ${
                             isSel
                               ? "bg-primary text-white border-primary"
                               : "bg-card border-border text-muted-foreground hover:text-foreground"
@@ -824,14 +840,16 @@ export const NotebookLMChat: React.FC = () => {
         <div className="h-16 border-b border-border/80 bg-card/20 backdrop-blur-md px-6 flex items-center justify-between shrink-0">
           
           {/* Conversation dropdown selector */}
-          <div className="flex items-center gap-2 max-w-[60%]">
-            <History className="h-4.5 w-4.5 text-muted-foreground" />
+          <div className="flex items-center gap-2 max-w-[60%] font-semibold text-xs leading-none">
+            <History className="h-4.5 w-4.5 text-muted-foreground shrink-0" />
             <select
               value={activeConversationId || ""}
               onChange={(e) => setActiveConversationId(e.target.value || null)}
               className="bg-transparent border-none text-xs font-semibold text-foreground focus:ring-0 max-w-full truncate cursor-pointer outline-none"
             >
-              <option value="" className="bg-card">-- Select Chat History --</option>
+              <option value="" className="bg-card">
+                {isConversationsLoading ? "Loading history..." : "-- Select Chat History --"}
+              </option>
               {conversations.map((c) => (
                 <option key={c.id} value={c.id} className="bg-card text-foreground">
                   {c.title}
@@ -842,13 +860,15 @@ export const NotebookLMChat: React.FC = () => {
 
           <div className="flex items-center gap-3">
             {/* New Chat Button */}
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={handleCreateConversation}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-primary/20 hover:border-primary/40 bg-primary/5 text-xs text-primary font-bold transition-all hover:scale-105"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-primary/20 hover:border-primary/40 bg-primary/5 text-xs text-primary font-bold transition-all shadow-sm"
             >
               <Plus className="h-3.5 w-3.5" />
               New Chat
-            </button>
+            </motion.button>
           </div>
         </div>
 
@@ -865,11 +885,11 @@ export const NotebookLMChat: React.FC = () => {
           ) : messages.length === 0 ? (
             /* Welcome empty state */
             <div className="max-w-xl mx-auto py-12 text-center space-y-8 flex flex-col justify-center h-full">
-              <div className="space-y-3">
-                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-500 shadow-md shadow-indigo-500/5 mx-auto">
+              <div className="space-y-3 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-md shadow-primary/5 mx-auto">
                   <BrainCircuit className="h-6 w-6" />
                 </span>
-                <h2 className="text-lg font-bold tracking-tight">
+                <h2 className="text-lg font-bold tracking-tight text-foreground animate-pulse">
                   NotebookLM cited AI Chat
                 </h2>
                 <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
@@ -880,12 +900,13 @@ export const NotebookLMChat: React.FC = () => {
               {/* Suggested prompt cards */}
               <div className="grid grid-cols-1 gap-3 text-left">
                 {suggestedPrompts.map((item, idx) => (
-                  <div
+                  <motion.div
                     key={idx}
+                    whileHover={{ scale: 1.01, y: -2 }}
                     onClick={() => handleSendMessage(item.prompt)}
-                    className="p-4 rounded-2xl border border-border/80 bg-card/45 hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all hover:-translate-y-0.5 shadow-sm flex items-start gap-3 group"
+                    className="p-4 rounded-2xl border border-border/80 bg-card/45 hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all shadow-sm flex items-start gap-3 group"
                   >
-                    <Sparkles className="h-4.5 w-4.5 text-indigo-500 shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
+                    <Sparkles className="h-4.5 w-4.5 text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-xs text-foreground group-hover:text-primary transition-colors">
                         {item.title}
@@ -895,7 +916,7 @@ export const NotebookLMChat: React.FC = () => {
                       </p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground/60 shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
@@ -975,18 +996,19 @@ export const NotebookLMChat: React.FC = () => {
                       {!isUser && references.length > 0 && (
                         <div className="mt-3 border-t border-border/30 pt-3 space-y-2 text-left">
                           <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 flex items-center gap-1.5">
-                            <BookOpen className="h-3.5 w-3.5 text-indigo-500" />
+                            <BookOpen className="h-3.5 w-3.5 text-primary" />
                             Retrieved Sources ({references.length})
                           </h4>
                           
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {references.map((ref, idx) => (
-                              <div
+                              <motion.div
                                 key={ref.chunk_uuid || idx}
+                                whileHover={{ y: -1.5, scale: 1.01 }}
                                 onClick={() => setActiveCitationPreview(ref)}
-                                className="p-2 rounded-xl bg-card border border-border/80 hover:border-indigo-500/40 hover:bg-indigo-500/5 cursor-pointer transition-all flex items-start gap-2.5 group"
+                                className="p-2 rounded-xl bg-card border border-border/80 hover:border-primary/40 hover:bg-primary/5 cursor-pointer transition-all flex items-start gap-2.5 group shadow-sm"
                               >
-                                <span className="h-5 w-5 rounded bg-indigo-500/10 text-indigo-500 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                <span className="h-5 w-5 rounded bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
                                   {idx + 1}
                                 </span>
                                 <div className="flex-grow min-w-0">
@@ -999,7 +1021,7 @@ export const NotebookLMChat: React.FC = () => {
                                   </p>
                                 </div>
                                 <ExternalLink className="h-3 w-3 text-muted-foreground/60 shrink-0 self-center opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </div>
+                              </motion.div>
                             ))}
                           </div>
                         </div>
@@ -1015,6 +1037,33 @@ export const NotebookLMChat: React.FC = () => {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Follow-up suggestions */}
+          {!isMessagesLoading && messages.length > 0 && !isStreaming && (
+            <div className="max-w-3xl mx-auto w-full flex flex-wrap gap-2 pt-2 px-1 text-left">
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-muted-foreground/60 self-center">
+                Suggested Follow-ups:
+              </span>
+              <button
+                onClick={() => handleSendMessage("Summarize this response in a few bullets.")}
+                className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-border/70 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all active:scale-95 cursor-pointer"
+              >
+                Summarize response
+              </button>
+              <button
+                onClick={() => handleSendMessage("Simplify the vocabulary in this explanation.")}
+                className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-border/70 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all active:scale-95 cursor-pointer"
+              >
+                Simplify explanation
+              </button>
+              <button
+                onClick={() => handleSendMessage("What are the key facts supporting this?")}
+                className="px-2.5 py-1 text-[10px] font-bold rounded-lg border border-border/70 hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-primary transition-all active:scale-95 cursor-pointer"
+              >
+                List key facts
+              </button>
             </div>
           )}
 
@@ -1042,16 +1091,18 @@ export const NotebookLMChat: React.FC = () => {
                   : "Ask a question about all workspace documents..."
               }
               disabled={isStreaming}
-              className="flex-grow rounded-2xl border border-border/80 bg-background/50 hover:bg-background/80 focus:border-primary py-3.5 pl-4 pr-12 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none resize-none focus:ring-0 max-h-32 transition-colors scrollbar"
+              className="flex-grow rounded-2xl border border-border/80 bg-background/50 hover:bg-background/80 focus:border-primary py-3.5 pl-4 pr-12 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none resize-none focus:ring-0 max-h-32 transition-colors scrollbar text-left animate-fadeIn"
             />
             
             {/* Send Button */}
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => handleSendMessage()}
               disabled={isStreaming || !questionInput.trim()}
               className={`absolute right-2 top-2 h-9 w-9 rounded-xl flex items-center justify-center transition-all ${
                 questionInput.trim() && !isStreaming
-                  ? "bg-primary text-white shadow-md shadow-primary/20 hover:scale-105"
+                  ? "bg-primary text-white shadow-md shadow-primary/20"
                   : "bg-muted text-muted-foreground cursor-not-allowed"
               }`}
             >
@@ -1060,72 +1111,120 @@ export const NotebookLMChat: React.FC = () => {
               ) : (
                 <Send className="h-4 w-4" />
               )}
-            </button>
+            </motion.button>
           </div>
           
-          <p className="text-[10px] text-muted-foreground text-center">
+          <p className="text-[10px] text-muted-foreground text-center font-medium">
             NoteAI citations mapping matches segment vectors exactly. Model parameters: Temp 0.0, Context Limit 4000 tokens.
           </p>
         </div>
       </div>
 
-      {/* 3. DYNAMIC OVERLAY MODAL: Citation Preview Panel */}
-      {activeCitationPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="w-full max-w-xl glass-panel rounded-3xl p-6 shadow-2xl space-y-4 border border-border/80 bg-card text-left">
-            
-            <div className="flex justify-between items-start border-b border-border/50 pb-3">
-              <div>
-                <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 text-[10px] font-extrabold uppercase border border-indigo-500/20">
-                  Citation Reference
-                </span>
-                <h3 className="font-extrabold text-sm text-foreground mt-2 truncate max-w-[360px]" title={activeCitationPreview.document_name}>
-                  {activeCitationPreview.document_name}
-                </h3>
-              </div>
-              <button
-                onClick={() => setActiveCitationPreview(null)}
-                className="text-muted-foreground hover:text-foreground rounded-xl p-1.5 hover:bg-muted/50 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+      {/* 3. DYNAMIC OVERLAY DRAWER: Citation Side Panel (NotebookLM style) */}
+      <AnimatePresence>
+        {activeCitationPreview && (
+          <>
+            {/* Backdrop overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActiveCitationPreview(null)}
+              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
+            />
+            {/* Drawer container */}
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 280, damping: 28 }}
+              className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-card border-l border-border/80 z-50 shadow-2xl p-6 flex flex-col justify-between"
+            >
+              <div className="flex-grow flex flex-col justify-start space-y-5 overflow-y-auto scrollbar pr-1 text-left">
+                {/* Header */}
+                <div className="flex justify-between items-start border-b border-border/55 pb-3">
+                  <div>
+                    <span className="px-2.5 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-extrabold uppercase border border-primary/25">
+                      Citation Reference
+                    </span>
+                    <h3 className="font-extrabold text-sm text-foreground mt-3 leading-snug break-all" title={activeCitationPreview.document_name}>
+                      {activeCitationPreview.document_name}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setActiveCitationPreview(null)}
+                    className="text-muted-foreground hover:text-foreground rounded-xl p-1.5 hover:bg-muted/50 transition-colors shrink-0"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
 
-            {/* Chunk details and coordinates info */}
-            <div className="grid grid-cols-2 gap-3 text-[11px] font-semibold text-muted-foreground">
-              <div className="p-2.5 rounded-xl border border-border/60 bg-background/30">
-                <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60">Position Coordinate</span>
-                <span className="text-foreground font-bold mt-1 block">
-                  {activeCitationPreview.page_number ? `Page Number ${activeCitationPreview.page_number}` : activeCitationPreview.section_title ? `Section: ${activeCitationPreview.section_title}` : "Reference Chunk"}
-                </span>
-              </div>
-              <div className="p-2.5 rounded-xl border border-border/60 bg-background/30">
-                <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60">Similarity Score</span>
-                <span className="text-foreground font-bold mt-1 block">
-                  {activeCitationPreview.similarity_score ? `${Math.round(activeCitationPreview.similarity_score * 100)}% Match Confidence` : "N/A"}
-                </span>
-              </div>
-            </div>
+                {/* Info Cards */}
+                <div className="grid grid-cols-2 gap-3 text-[11px] font-semibold text-muted-foreground shrink-0">
+                  <div className="p-3 rounded-2xl border border-border/60 bg-background/30 shadow-inner">
+                    <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60 font-bold">Position</span>
+                    <span className="text-foreground font-black mt-1 block">
+                      {activeCitationPreview.page_number ? `Page ${activeCitationPreview.page_number}` : activeCitationPreview.section_title ? `Section: ${activeCitationPreview.section_title}` : "Reference Chunk"}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-2xl border border-border/60 bg-background/30 shadow-inner">
+                    <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60 font-bold">Similarity</span>
+                    <span className="text-foreground font-black mt-1 block">
+                      {activeCitationPreview.similarity_score ? `${Math.round(activeCitationPreview.similarity_score * 100)}% Match` : "N/A"}
+                    </span>
+                  </div>
+                </div>
 
-            {/* Chunk Text Viewer box */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Semantic Source Extract</label>
-              <div className="p-4 rounded-2xl bg-muted/65 border border-border/60 max-h-60 overflow-y-auto scrollbar">
-                <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap select-all font-medium">
-                  {activeCitationPreview.chunk_text}
-                </p>
+                {/* Text extract */}
+                <div className="space-y-2 flex-grow flex flex-col min-h-0">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Semantic Source Extract</label>
+                  <div className="p-4 rounded-2xl bg-muted/50 border border-border/40 overflow-y-auto flex-grow scrollbar max-h-[55vh]">
+                    <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap select-all font-medium">
+                      {activeCitationPreview.chunk_text}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setActiveCitationPreview(null)}
-                className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold shadow-lg shadow-primary/10 hover:bg-primary/95 transition-all"
-              >
-                Close Preview
-              </button>
-            </div>
+              {/* Footer action */}
+              <div className="border-t border-border/50 pt-4 shrink-0 mt-4">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setActiveCitationPreview(null)}
+                  className="w-full py-3 rounded-xl bg-primary text-white text-xs font-bold shadow-lg shadow-primary/10 hover:bg-primary/95 transition-all"
+                >
+                  Close Preview
+                </motion.button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Citation Hover Tooltip */}
+      {hoveredCitation && (
+        <div
+          style={{
+            position: "fixed",
+            top: `${hoveredCitation.rect.top - 120}px`,
+            left: `${Math.max(10, Math.min(window.innerWidth - 310, hoveredCitation.rect.left - 130))}px`,
+            width: "280px",
+            zIndex: 100,
+          }}
+          className="pointer-events-none p-3.5 rounded-2xl border border-border/80 bg-card/95 backdrop-blur-md shadow-2xl text-left"
+        >
+          <div className="flex items-center justify-between border-b border-border/20 pb-1.5 mb-1.5">
+            <span className="text-[9px] uppercase tracking-wider text-primary font-black truncate max-w-[180px]">
+              {hoveredCitation.ref.document_name}
+            </span>
+            <span className="text-[8px] bg-primary/10 text-primary border border-primary/20 px-1 py-0.2 rounded font-extrabold shrink-0">
+              {hoveredCitation.ref.page_number ? `Page ${hoveredCitation.ref.page_number}` : "Ref"}
+            </span>
           </div>
+          <p className="text-[10px] text-foreground leading-relaxed line-clamp-3 font-semibold">
+            {hoveredCitation.ref.chunk_text}
+          </p>
         </div>
       )}
     </div>

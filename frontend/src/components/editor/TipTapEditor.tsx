@@ -1,7 +1,10 @@
 import React, { useEffect } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
+import { BubbleMenu, FloatingMenu } from "@tiptap/react/menus";
+import { motion } from "framer-motion";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import { useUIStore } from "@/store/ui-store";
 import {
   Bold,
   Italic,
@@ -13,17 +16,27 @@ import {
   Quote,
   Undo,
   Redo,
+  Sparkles,
+  BookOpen,
+  PencilLine,
+  Maximize,
+  Minimize,
+  Type
 } from "lucide-react";
 
 interface TipTapEditorProps {
   content: string;
   onChange: (html: string) => void;
+  onAction?: (action: "explain" | "summarize" | "improve", selectedText: string) => void;
 }
 
 export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   content,
   onChange,
+  onAction,
 }) => {
+  const { isFocusMode, toggleFocusMode } = useUIStore();
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -186,8 +199,8 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           </button>
         </div>
 
-        {/* Undo / Redo */}
-        <div className="flex items-center gap-1">
+        {/* Undo / Redo & Focus */}
+        <div className="flex items-center gap-1 border-l border-border/40 pl-2 ml-2">
           <button
             type="button"
             onClick={() => editor.chain().focus().undo().run()}
@@ -207,11 +220,130 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           >
             <Redo className="h-4 w-4" />
           </button>
+
+          <button
+            type="button"
+            onClick={toggleFocusMode}
+            className={`p-1.5 rounded-lg ml-1 transition-all ${
+              isFocusMode
+                ? "bg-primary/20 text-primary font-bold shadow-sm"
+                : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+            }`}
+            title="Toggle Focus Mode"
+          >
+            {isFocusMode ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+          </button>
         </div>
       </div>
 
       {/* Editor Content Area */}
-      <div className="flex-grow overflow-y-auto max-h-[60vh] bg-card/5">
+      <div className="flex-grow overflow-y-auto max-h-[60vh] bg-card/5 relative">
+        {editor && (
+          <FloatingMenu
+            editor={editor}
+            tippyOptions={{ duration: 100, placement: "right" }}
+            className="flex flex-col gap-1 p-2 bg-popover/95 border border-border/80 rounded-2xl shadow-2xl backdrop-blur-md z-50 min-w-[160px]"
+          >
+            <div className="px-2 pb-1 text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">
+              Insert
+            </div>
+            <button
+              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              className="flex items-center gap-2 px-2 py-1.5 text-xs text-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors text-left"
+            >
+              <Heading1 className="h-4 w-4 text-muted-foreground" /> Heading 1
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              className="flex items-center gap-2 px-2 py-1.5 text-xs text-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors text-left"
+            >
+              <Heading2 className="h-4 w-4 text-muted-foreground" /> Heading 2
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              className="flex items-center gap-2 px-2 py-1.5 text-xs text-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors text-left"
+            >
+              <List className="h-4 w-4 text-muted-foreground" /> Bullet List
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+              className="flex items-center gap-2 px-2 py-1.5 text-xs text-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors text-left"
+            >
+              <Code className="h-4 w-4 text-muted-foreground" /> Code Block
+            </button>
+            <button
+              onClick={() => editor.chain().focus().toggleBlockquote().run()}
+              className="flex items-center gap-2 px-2 py-1.5 text-xs text-foreground hover:bg-primary/10 hover:text-primary rounded-xl transition-colors text-left"
+            >
+              <Quote className="h-4 w-4 text-muted-foreground" /> Quote
+            </button>
+          </FloatingMenu>
+        )}
+
+        {editor && onAction && (
+          <BubbleMenu
+            editor={editor}
+            {...({ tippyOptions: { duration: 0 } } as any)}
+            className="z-50"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 6 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 6 }}
+              transition={{ type: "spring", stiffness: 450, damping: 28 }}
+              className="flex items-center gap-1 p-1 bg-popover/90 border border-border/80 rounded-2xl shadow-xl backdrop-blur-md"
+            >
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                type="button"
+                onClick={() => {
+                  const selectedText = editor.state.doc.textBetween(
+                    editor.state.selection.from,
+                    editor.state.selection.to,
+                    " "
+                  );
+                  if (selectedText.trim()) onAction("explain", selectedText);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold rounded-lg text-foreground hover:bg-muted/60 transition-all shrink-0 cursor-pointer"
+              >
+                <BookOpen className="h-3 w-3 text-indigo-500" /> Explain
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                type="button"
+                onClick={() => {
+                  const selectedText = editor.state.doc.textBetween(
+                    editor.state.selection.from,
+                    editor.state.selection.to,
+                    " "
+                  );
+                  if (selectedText.trim()) onAction("summarize", selectedText);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold rounded-lg text-foreground hover:bg-muted/60 transition-all shrink-0 cursor-pointer"
+              >
+                <Sparkles className="h-3 w-3 text-amber-500" /> Summarize
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                type="button"
+                onClick={() => {
+                  const selectedText = editor.state.doc.textBetween(
+                    editor.state.selection.from,
+                    editor.state.selection.to,
+                    " "
+                  );
+                  if (selectedText.trim()) onAction("improve", selectedText);
+                }}
+                className="flex items-center gap-1 px-2.5 py-1.5 text-[10px] font-bold rounded-lg text-foreground hover:bg-muted/60 transition-all shrink-0 cursor-pointer"
+              >
+                <PencilLine className="h-3 w-3 text-emerald-500" /> Refine
+              </motion.button>
+            </motion.div>
+          </BubbleMenu>
+        )}
         <EditorContent editor={editor} />
       </div>
     </div>

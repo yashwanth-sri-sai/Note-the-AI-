@@ -3,7 +3,6 @@ from typing import List
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db, get_current_workspace_id
-from app.api.middlewares.rate_limiter import rate_limit_chat
 from app.db.models.user import User
 from fastapi.responses import StreamingResponse
 from app.schemas.chat import ConversationCreate, ConversationResponse, MessageCreate, MessageResponse, ChatResponse
@@ -47,14 +46,18 @@ async def list_conversation_messages(
     return conversation.messages
 
 
+from app.api.middlewares.rate_limiter import limiter
+from fastapi import Request
+
 @router.post("/conversations/{conversation_id}/messages", status_code=status.HTTP_201_CREATED)
+@limiter.limit("20/minute")
 async def send_message_rag(
+    request: Request,
     conversation_id: uuid.UUID,
     payload: MessageCreate,
     workspace_id: uuid.UUID = Depends(get_current_workspace_id),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    _rate_limit: None = Depends(rate_limit_chat),
 ):
     """Submit user message, execute pgvector context retrieval, log history, and generate LLM cited response (streams if requested)."""
     chat_service = ChatService(db)
@@ -66,6 +69,7 @@ async def send_message_rag(
             workspace_id=workspace_id,
             question=payload.content,
             document_ids=payload.document_ids,
+            note_ids=payload.note_ids,
             file_types=payload.file_types,
             date_start=payload.date_start,
             date_end=payload.date_end,
@@ -79,6 +83,7 @@ async def send_message_rag(
         workspace_id=workspace_id,
         question=payload.content,
         document_ids=payload.document_ids,
+        note_ids=payload.note_ids,
         file_types=payload.file_types,
         date_start=payload.date_start,
         date_end=payload.date_end,

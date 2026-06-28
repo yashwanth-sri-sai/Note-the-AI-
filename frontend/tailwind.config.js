@@ -11,14 +11,23 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Inter", "sans-serif"],
+        heading: ["Poppins", "sans-serif"],
+        mono: ["JetBrains Mono", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        surface: "hsl(var(--surface))",
+        "surface-secondary": "hsl(var(--surface-secondary))",
+        sidebar: "hsl(var(--sidebar))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
+          hover: "hsl(var(--primary-hover))",
           foreground: "hsl(var(--primary-foreground))",
         },
         secondary: {
@@ -45,6 +54,24 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Midnight Slate Custom colors
+        emerald: "hsl(var(--emerald))",
+        amber: "hsl(var(--amber))",
+        violet: "hsl(var(--violet))",
+        rose: "hsl(var(--rose))",
+        cyan: "hsl(var(--cyan))",
+        "primary-text": "hsl(var(--primary-text))",
+        "secondary-text": "hsl(var(--secondary-text))",
+        "muted-text": "hsl(var(--muted-text))",
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        error: "hsl(var(--error))",
+        info: "hsl(var(--info))",
+        // Theme Aliases to ensure standard classes match Midnight Slate
+        indigo: "hsl(var(--primary))",
+        pink: "hsl(var(--rose))",
+        purple: "hsl(var(--violet))",
+        teal: "hsl(var(--emerald))",
       },
       borderRadius: {
         lg: "var(--radius)",

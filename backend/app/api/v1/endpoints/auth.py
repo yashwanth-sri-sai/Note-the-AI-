@@ -2,7 +2,7 @@ from fastapi import APIRouter, Cookie, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.core.config import settings
-from app.core.exceptions import BadRequestException
+from app.core.exceptions import BadRequestException, UnauthorizedException
 from app.schemas.auth import (
     ForgotPasswordRequest,
     GoogleAuthRequest,
@@ -16,6 +16,8 @@ from app.services.auth import AuthService
 from app.services.user import UserService
 
 router = APIRouter()
+from app.api.middlewares.rate_limiter import limiter
+from fastapi import Request
 
 
 def set_refresh_cookie(response: Response, token: str) -> None:
@@ -49,8 +51,9 @@ def clear_refresh_cookie(response: Response) -> None:
 @router.post(
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
+@limiter.limit("5/minute")
 async def register(
-    payload: RegisterRequest, db: AsyncSession = Depends(get_db)
+    request: Request, payload: RegisterRequest, db: AsyncSession = Depends(get_db)
 ):
     """Register a new standard user account."""
     user_service = UserService(db)
@@ -64,8 +67,9 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def login(
-    payload: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)
+    request: Request, payload: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)
 ):
     """Log in an existing user and set a refresh cookie."""
     auth_service = AuthService(db)
@@ -82,7 +86,9 @@ async def login(
 
 
 @router.post("/oauth/google", response_model=TokenResponse)
+@limiter.limit("10/minute")
 async def google_oauth(
+    request: Request,
     payload: GoogleAuthRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
@@ -109,10 +115,11 @@ async def refresh(
 ):
     """Generate a new access token using the HTTP-only refresh token."""
     if not refresh_token:
-        raise BadRequestException(detail="Refresh token cookie missing")
+        raise UnauthorizedException(detail="Refresh token cookie missing")
 
     auth_service = AuthService(db)
-    new_access_token = await auth_service.refresh_access_token(refresh_token)
+    new_access_token, new_refresh_token = await auth_service.refresh_access_token(refresh_token)
+    set_refresh_cookie(response, new_refresh_token)
     return TokenResponse(access_token=new_access_token)
 
 
@@ -135,8 +142,9 @@ async def logout(
 
 
 @router.post("/forgot-password", status_code=status.HTTP_200_OK)
+@limiter.limit("3/minute")
 async def forgot_password(
-    payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)
+    request: Request, payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)
 ):
     """Initiate a password reset request. Returns success response (mock)."""
     # For Phase 1, we return a mock success response to avoid configuring real SMTP servers
@@ -146,8 +154,9 @@ async def forgot_password(
 
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)
+@limiter.limit("3/minute")
 async def reset_password(
-    payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
+    request: Request, payload: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
 ):
     """Set a new password using a token. Returns success response (mock)."""
     # For Phase 1, we return a mock success response

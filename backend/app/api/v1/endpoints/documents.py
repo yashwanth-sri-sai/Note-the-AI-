@@ -5,9 +5,9 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db, get_current_workspace_id
-from app.api.middlewares.rate_limiter import rate_limit_upload
 from app.db.models.user import User
 from app.db.models.document import Document, DocumentChunk, Embedding, ProcessingJob
+from app.db.models.note import Note
 from app.schemas.document import DocumentResponse, ProcessingJobResponse, ChunkNavigationResponse
 from app.services.storage import StorageService
 from app.services.extractor import get_extractor
@@ -16,6 +16,9 @@ from app.services.embedding import get_embedding_provider
 from app.services.token_estimator import TokenService
 from app.core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 import os
+import magic
+from pathlib import Path
+from app.api.middlewares.rate_limiter import limiter
 
 router = APIRouter()
 
@@ -121,6 +124,14 @@ async def run_document_ingestion_pipeline(
             # 5. Complete Job & Document Status
             job.status = "completed"
             doc.status = "completed"
+
+            # Update corresponding Note content with the extracted text
+            extracted_text = "\n\n".join([c["text"] for c in flat_chunks])
+            note = await db.get(Note, document_id)
+            if note:
+                note.content = extracted_text
+                db.add(note)
+
             await db.commit()
 
             # 6. Log latency metrics asynchronously
@@ -150,12 +161,79 @@ async def run_document_ingestion_pipeline(
                 job.status = "failed"
                 job.error_message = str(e)
                 doc.status = "failed"
+
+                # Update corresponding Note content to indicate failure
+                note = await db.get(Note, document_id)
+                if note:
+                    note.content = f"Failed to process document: {str(e)}"
+                    db.add(note)
+
+                await db.commit()
+
+
+
+
+async def run_document_reindex_pipeline(
+    document_id: uuid.UUID,
+    db_session_factory,
+):
+    """Re-embed chunks of a document using the active embedding provider."""
+    async with db_session_factory() as db:
+        doc = await db.get(Document, document_id)
+        if not doc:
+            return
+            
+        try:
+            doc.status = "processing"
+            await db.commit()
+            
+            # Load chunks
+            stmt = select(DocumentChunk).where(DocumentChunk.document_id == document_id).order_by(DocumentChunk.chunk_index)
+            res = await db.execute(stmt)
+            chunks = res.scalars().all()
+            
+            if chunks:
+                # Generate new embeddings
+                embedding_provider = get_embedding_provider()
+                provider_name = embedding_provider.__class__.__name__
+                model_name = getattr(embedding_provider, "model", "LocalTrigram")
+                
+                texts = [c.chunk_text for c in chunks]
+                vectors = await embedding_provider.get_embeddings(texts)
+                
+                # Update database
+                for chunk, vector in zip(chunks, vectors):
+                    # Delete existing embeddings for this chunk
+                    stmt_del = select(Embedding).where(Embedding.chunk_id == chunk.id)
+                    res_del = await db.execute(stmt_del)
+                    old_embs = res_del.scalars().all()
+                    for oe in old_embs:
+                        await db.delete(oe)
+                    await db.flush()
+                    
+                    # Add new embedding
+                    new_emb = Embedding(
+                        chunk_id=chunk.id,
+                        embedding=vector,
+                        provider=provider_name,
+                        model_name=model_name
+                    )
+                    db.add(new_emb)
+                    
+            doc.status = "completed"
+            await db.commit()
+        except Exception as e:
+            await db.rollback()
+            doc = await db.get(Document, document_id)
+            if doc:
+                doc.status = "failed"
                 await db.commit()
 
 
 
 
 @router.post("/upload", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("5/minute")
 async def upload_document(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -163,7 +241,6 @@ async def upload_document(
     current_user: User = Depends(get_current_user),
     workspace_id: uuid.UUID = Depends(get_current_workspace_id),
     db: AsyncSession = Depends(get_db),
-    _rate_limit: None = Depends(rate_limit_upload),
 ):
     """Upload a PDF, DOCX, TXT, or Markdown document to S3/local and trigger the async ingestion pipeline."""
     import time
@@ -185,6 +262,23 @@ async def upload_document(
         file_bytes = await file.read()
         file_size = len(file_bytes)
 
+        # 1.5 Strict MIME Type validation using magic bytes
+        detected_mime = magic.from_buffer(file_bytes, mime=True)
+        valid_mimes = {
+            ".pdf": "application/pdf",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".txt": "text/plain",
+            ".md": "text/plain"  # markdown is often detected as text/plain
+        }
+        expected_mime = valid_mimes.get(ext)
+        if not expected_mime or not detected_mime.startswith(expected_mime.split('/')[0]):
+            # Sometimes docx can be detected as application/zip or application/octet-stream,
+            # but we want to prevent executables (e.g., application/x-dosexec)
+            if detected_mime in ["application/x-dosexec", "application/x-executable", "text/html"]:
+                raise BadRequestException(
+                    detail=f"Invalid file content detected. Uploaded file signature ({detected_mime}) does not match extension."
+                )
+
         # 2. Store in storage bucket/local
         storage_service = StorageService()
         storage_path = await storage_service.upload_file(file_bytes, fn)
@@ -201,6 +295,17 @@ async def upload_document(
         )
         db.add(doc)
         await db.flush()  # Generate doc.id
+
+        # Create a matching Note entry for this document
+        note = Note(
+            id=doc.id,
+            title=fn,
+            content="Processing document...",
+            workspace_id=workspace_id,
+            created_by=current_user.id
+        )
+        db.add(note)
+        await db.flush()
 
         # 4. Create ProcessingJob entry
         job = ProcessingJob(
@@ -325,6 +430,13 @@ async def delete_document(
     storage_service = StorageService()
     await storage_service.delete_file(doc.storage_path)
 
+    # Delete corresponding Note with same ID
+    note_stmt = select(Note).where(Note.id == document_id, Note.workspace_id == workspace_id)
+    note_result = await db.execute(note_stmt)
+    note = note_result.scalar_one_or_none()
+    if note:
+        await db.delete(note)
+
     # Cascading deletes will remove chunks, embeddings, and jobs
     await db.delete(doc)
     await db.commit()
@@ -338,16 +450,17 @@ async def download_local_file(
     current_user: User = Depends(get_current_user),
 ):
     """Download a file from local storage fallback (for development environment only)."""
-    # Enforce standard security checks to avoid path traversal
-    if ".." in folder or ".." in filename:
+    # Use pathlib for secure path resolution to prevent traversal
+    base_dir = Path(__file__).resolve().parent.parent.parent.parent / "storage"
+    target_path = (base_dir / folder / filename).resolve()
+    
+    if not target_path.is_relative_to(base_dir):
         raise ForbiddenException("Path traversal forbidden")
         
-    local_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "storage"))
-    file_path = os.path.join(local_dir, folder, filename)
-    if not os.path.exists(file_path):
+    if not target_path.exists() or not target_path.is_file():
         raise NotFoundException("File not found")
         
-    return FileResponse(file_path)
+    return FileResponse(str(target_path))
 
 
 @router.get("/chunks/{chunk_uuid}", response_model=ChunkNavigationResponse)
@@ -384,4 +497,32 @@ async def resolve_document_chunk(
         "chunk_text": row.chunk_text,
         "source_reference": row.source_reference
     }
+
+
+@router.post("/{document_id}/reindex", response_model=DocumentResponse)
+async def reindex_document(
+    document_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    workspace_id: uuid.UUID = Depends(get_current_workspace_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger background reindexing of a document's chunks using the active embedding provider."""
+    stmt = select(Document).where(Document.id == document_id, Document.workspace_id == workspace_id)
+    result = await db.execute(stmt)
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise NotFoundException(detail="Document not found")
+        
+    doc.status = "pending"
+    await db.commit()
+    
+    from app.db.session import async_session_factory
+    background_tasks.add_task(
+        run_document_reindex_pipeline,
+        document_id,
+        async_session_factory,
+    )
+    
+    return doc
+
 
