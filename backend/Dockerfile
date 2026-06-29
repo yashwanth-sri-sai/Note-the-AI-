@@ -60,4 +60,3 @@ EXPOSE 8000
 
 # Start command
 CMD ["./start.sh"]
-ZOOM_FACTOR = 1.0  # reference
