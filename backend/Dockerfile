@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     gcc \
+    libmagic1 \
+    file \
     && rm -rf /var/lib/apt/lists/*
 
 # Setup virtualenv
@@ -32,6 +34,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    libmagic1 \
+    file \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy virtualenv dependencies from builder stage
