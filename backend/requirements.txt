@@ -21,3 +21,5 @@ python-docx>=1.1.0
 sentry-sdk>=2.0.0
 slowapi>=0.1.9
 python-magic==0.4.27
+numpy>=1.26.4
+tenacity>=8.2.3
