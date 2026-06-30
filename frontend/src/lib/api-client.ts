@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_BASE_URL;
+const RAW_API_URL = import.meta.env.VITE_API_BASE_URL || "";
+const API_URL = RAW_API_URL.replace(/\/$/, ""); // Strip trailing slash if present
 
 export const apiClient = axios.create({
   baseURL: `${API_URL}/api/v1`,
@@ -15,6 +16,13 @@ console.log("VITE_API_URL", import.meta.env.VITE_API_URL);
 console.log("VITE_API_BASE_URL", import.meta.env.VITE_API_BASE_URL);
 console.log("Axios Base URL", apiClient.defaults.baseURL);
 console.log("Auth API Client", apiClient);
+
+apiClient.interceptors.request.use(config => {
+    console.log("REQUEST URL", config.baseURL + (config.url || ""));
+    console.log("METHOD", config.method);
+    console.log("HEADERS", config.headers);
+    return config;
+});
 
 let accessToken: string | null = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
