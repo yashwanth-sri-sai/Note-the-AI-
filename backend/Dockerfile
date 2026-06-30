@@ -60,7 +60,7 @@ RUN chmod +x start.sh
 # Switch execution user to the non-root profile
 USER appuser
 
-EXPOSE 8000
+EXPOSE 8080
 
 # Start command
 CMD ["./start.sh"]

@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -97,7 +98,7 @@ async def startup_event():
     # Run stuck job recovery to clean up any jobs interrupted by a prior crash
     try:
         from app.services.recovery_service import stuck_job_recovery_task
-        await stuck_job_recovery_task()
+        asyncio.create_task(stuck_job_recovery_task())
     except Exception as e:
         logger.error(f"Startup recovery task failed: {e}")
 
@@ -163,6 +164,13 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 # Include API V1 Router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+
+@app.get("/", tags=["Health"])
+async def root():
+    return {
+        "status": "running",
+        "service": settings.PROJECT_NAME
+    }
 
 # Root Health Check endpoint
 @app.get("/health", tags=["Health"])
