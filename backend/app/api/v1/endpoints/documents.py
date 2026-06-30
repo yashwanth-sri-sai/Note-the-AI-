@@ -245,13 +245,20 @@ async def upload_document(
     """Upload a PDF, DOCX, TXT, or Markdown document to S3/local and trigger the async ingestion pipeline."""
     import time
     import asyncio
+    import logging
+    import traceback
+    from fastapi.responses import JSONResponse
     from app.services.metrics import log_request_metrics_task
 
+    logger = logging.getLogger("app.api.documents")
     start_time = time.perf_counter()
     client_ip = request.client.host if request.client else None
     
+    logger.info(f"Upload request received from {client_ip} for user {current_user.id}")
+    
     try:
         # 1. Basic validation
+        logger.info("Starting file validation...")
         fn = file.filename or "uploaded_file"
         ext = os.path.splitext(fn)[1].lower()
         if ext not in [".pdf", ".docx", ".txt", ".md"]:
@@ -259,10 +266,13 @@ async def upload_document(
                 detail=f"Unsupported file extension {ext}. Only PDF, DOCX, TXT, and Markdown are supported."
             )
 
+        logger.info("Reading multipart file bytes...")
         file_bytes = await file.read()
         file_size = len(file_bytes)
+        logger.info(f"File read successfully. Size: {file_size} bytes")
 
         # 1.5 Strict MIME Type validation using magic bytes
+        logger.info("Validating MIME type using magic bytes...")
         detected_mime = magic.from_buffer(file_bytes, mime=True)
         valid_mimes = {
             ".pdf": "application/pdf",
@@ -272,18 +282,20 @@ async def upload_document(
         }
         expected_mime = valid_mimes.get(ext)
         if not expected_mime or not detected_mime.startswith(expected_mime.split('/')[0]):
-            # Sometimes docx can be detected as application/zip or application/octet-stream,
-            # but we want to prevent executables (e.g., application/x-dosexec)
             if detected_mime in ["application/x-dosexec", "application/x-executable", "text/html"]:
                 raise BadRequestException(
                     detail=f"Invalid file content detected. Uploaded file signature ({detected_mime}) does not match extension."
                 )
+        logger.info(f"MIME validation passed: {detected_mime}")
 
         # 2. Store in storage bucket/local
+        logger.info("Initiating storage upload...")
         storage_service = StorageService()
         storage_path = await storage_service.upload_file(file_bytes, fn)
+        logger.info(f"Storage upload successful. Path: {storage_path}")
 
         # 3. Create Document entry
+        logger.info("Saving document to database...")
         doc = Document(
             workspace_id=workspace_id,
             filename=fn,
@@ -317,6 +329,7 @@ async def upload_document(
 
         # Commit initial state to release DB locks before background task runs
         await db.commit()
+        logger.info(f"Database save successful. Document ID: {doc.id}")
 
         # 5. Enqueue background ingestion pipeline task
         from app.db.session import async_session_factory
@@ -352,9 +365,13 @@ async def upload_document(
                 model_name="None"
             )
         )
+        logger.info("Returning response successfully.")
         return doc
 
     except Exception as e:
+        logger.error(f"Upload failed: {str(e)}")
+        logger.error(traceback.format_exc())
+        
         total_response_ms = (time.perf_counter() - start_time) * 1000.0
         status_code = 400 if isinstance(e, BadRequestException) else 500
         asyncio.create_task(
@@ -376,7 +393,10 @@ async def upload_document(
                 error_message=str(e)
             )
         )
-        raise e
+        return JSONResponse(
+            status_code=status_code,
+            content={"detail": str(e), "code": "UPLOAD_FAILED"}
+        )
 
 
 @router.get("/", response_model=List[DocumentResponse])

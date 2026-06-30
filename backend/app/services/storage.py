@@ -14,19 +14,56 @@ except ImportError:
 
 class StorageService:
     def __init__(self):
+        import logging
+        logger = logging.getLogger("app.services.storage")
+        
         # 1. Check for Supabase configurations
         supabase_url = os.getenv("SUPABASE_URL")
-        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        supabase_s3_access_key = os.getenv("SUPABASE_S3_ACCESS_KEY_ID")
+        supabase_s3_secret_key = os.getenv("SUPABASE_S3_SECRET_ACCESS_KEY")
+        supabase_bucket = os.getenv("SUPABASE_STORAGE_BUCKET")
+        supabase_region = os.getenv("SUPABASE_STORAGE_REGION")
         
-        if boto3 and supabase_url and supabase_key:
-            # Extract project ref from supabase URL (e.g. https://xvpluvbtqzwzqkwckwsc.supabase.co -> xvpluvbtqzwzqkwckwsc)
-            project_ref = supabase_url.replace("https://", "").replace("http://", "").split(".")[0]
-            self.bucket_name = os.getenv("SUPABASE_STORAGE_BUCKET", "documents")
-            self.access_key = project_ref
-            self.secret_key = supabase_key
-            self.endpoint_url = f"{supabase_url.rstrip('/')}/storage/v1/s3"
-            self.region = os.getenv("SUPABASE_STORAGE_REGION", "ap-northeast-1")
+        # If Supabase URL or Access Key is provided, validate strictly for Supabase S3 integration
+        if supabase_url or supabase_s3_access_key:
+            missing_vars = []
+            if not supabase_url: missing_vars.append("SUPABASE_URL")
+            if not supabase_s3_access_key: missing_vars.append("SUPABASE_S3_ACCESS_KEY_ID")
+            if not supabase_s3_secret_key: missing_vars.append("SUPABASE_S3_SECRET_ACCESS_KEY")
+            if not supabase_bucket: missing_vars.append("SUPABASE_STORAGE_BUCKET")
+            if not supabase_region: missing_vars.append("SUPABASE_STORAGE_REGION")
+            
+            if missing_vars:
+                raise RuntimeError(f"Missing required Supabase S3 environment variables: {', '.join(missing_vars)}")
+                
+            if not boto3:
+                raise RuntimeError("boto3 library is missing but required for Supabase S3.")
+                
+            # Extract project ref from supabase URL (e.g. https://abcdefgh.supabase.co)
+            project_ref = (
+                supabase_url
+                .replace("https://", "")
+                .replace("http://", "")
+                .replace(".supabase.co", "")
+                .replace("/", "")
+            )
+            
+            self.bucket_name = supabase_bucket
+            self.access_key = supabase_s3_access_key
+            self.secret_key = supabase_s3_secret_key
+            self.region = supabase_region
             self.use_s3 = True
+            
+            # Construct the correct Supabase S3 endpoint
+            self.endpoint_url = f"https://{project_ref}.storage.supabase.co/storage/v1/s3"
+            
+            logger.info("Using Supabase S3")
+            logger.info(f"SUPABASE_URL={supabase_url}")
+            logger.info(f"Bucket={self.bucket_name}")
+            logger.info(f"Region={self.region}")
+            logger.info(f"Endpoint={self.endpoint_url}")
+            logger.info(f"Access Key Prefix={self.access_key[:8] if self.access_key else ''}")
+            logger.info(f"Secret Length={len(self.secret_key) if self.secret_key else 0}")
             
             session_opts = {
                 "aws_access_key_id": self.access_key,
@@ -35,6 +72,35 @@ class StorageService:
                 "endpoint_url": self.endpoint_url,
             }
             self.s3_client = boto3.client("s3", **session_opts)
+            
+            try:
+                self.s3_client.head_bucket(Bucket=self.bucket_name)
+                logger.info("Successfully authenticated with Supabase S3 via head_bucket()")
+            except ClientError as e:
+                import traceback
+                logger.error("Boto3 Authentication Test Failed (head_bucket)")
+                logger.error(traceback.format_exc())
+                
+                response = getattr(e, "response", {})
+                error_info = response.get("Error", {})
+                
+                error_code = error_info.get("Code", "Unknown")
+                error_message = error_info.get("Message", "Unknown")
+                http_status = response.get("ResponseMetadata", {}).get("HTTPStatusCode", "Unknown")
+                
+                logger.error(f"AWS Error Code: {error_code}")
+                logger.error(f"AWS Error Message: {error_message}")
+                logger.error(f"HTTP Status: {http_status}")
+                logger.error(f"Complete ClientError.response: {response}")
+                
+                if error_code == "InvalidAccessKeyId":
+                    logger.error("The Access Key ID is being rejected by Supabase.")
+                elif error_code == "SignatureDoesNotMatch":
+                    logger.error("The Secret Access Key is incorrect.")
+                elif error_code == "AccessDenied" or http_status == 403 or http_status == "403":
+                    logger.error("Credentials are valid but bucket permissions are incorrect.")
+                    
+                raise RuntimeError(f"S3 Connection Test Failed: {e}")
         else:
             # 2. Fallback to standard AWS S3 keys if configured
             self.bucket_name = os.getenv("AWS_S3_BUCKET_NAME")
@@ -65,10 +131,24 @@ class StorageService:
         storage_key = f"{folder}/{clean_filename}"
 
         if self.use_s3:
+            import logging
+            import asyncio
+            from fastapi import HTTPException
+            import traceback
+            
+            logger = logging.getLogger("app.services.storage")
+            logger.info(f"Initiating S3 upload. Bucket: {self.bucket_name}, Key: {storage_key}, Endpoint: {getattr(self, 'endpoint_url', 'AWS Default')}")
+            
+            loop = asyncio.get_running_loop()
+            
+            # Verify bucket exists before upload
             try:
-                # Run synchronous s3 upload in an executor
-                import asyncio
-                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, lambda: self.s3_client.head_bucket(Bucket=self.bucket_name))
+            except ClientError as e:
+                logger.error(f"head_bucket failed for {self.bucket_name}: {e}")
+                raise RuntimeError(f"Storage bucket '{self.bucket_name}' does not exist or is inaccessible: {e}")
+            
+            try:
                 await loop.run_in_executor(
                     None,
                     lambda: self.s3_client.put_object(
@@ -79,7 +159,18 @@ class StorageService:
                 )
                 return storage_key
             except ClientError as e:
-                raise Exception(f"S3 Upload failed: {e}")
+                logger.error("S3 Upload Failed")
+                logger.error(traceback.format_exc())
+                response_metadata = getattr(e, "response", {})
+                error_info = response_metadata.get("Error", {})
+                logger.error(f"ClientError.response: {response_metadata}")
+                logger.error(f"Error Code: {error_info.get('Code', 'Unknown')}")
+                logger.error(f"Error Message: {error_info.get('Message', 'Unknown')}")
+                
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"S3 Upload failed: {error_info.get('Message', str(e))}"
+                )
         else:
             # Local Storage Ingestion
             dest_dir = os.path.join(self.local_dir, folder)
