@@ -297,7 +297,8 @@ export const NotebookLMChat: React.FC = () => {
     // Start Fetching stream
     const token = getAccessToken();
     const activeWorkspace = activeWorkspaceId;
-    const apiURL = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
+    const API_URL = import.meta.env.VITE_API_URL;
+    const apiURL = `${API_URL}/api/v1`;
 
     try {
       const response = await fetch(`${apiURL}/chat/conversations/${convId}/messages`, {
