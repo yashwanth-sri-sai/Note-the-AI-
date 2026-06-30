@@ -8,8 +8,8 @@ from app.core.config import settings
 
 ALGORITHM = "HS256"
 
-# Use Argon2id for secure password hashing (OWASP recommendation)
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# Use Argon2id for secure password hashing (OWASP recommendation), but support legacy bcrypt hashes
+pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 
 def get_password_hash(password: str) -> str:
