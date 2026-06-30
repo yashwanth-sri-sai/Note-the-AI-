@@ -473,7 +473,7 @@ export const Dashboard: React.FC = () => {
                       src={
                         user.avatar_url.startsWith("http")
                           ? user.avatar_url
-                          : `${import.meta.env.VITE_API_URL}${user.avatar_url}`
+                          : `${import.meta.env.VITE_API_BASE_URL}${user.avatar_url}`
                       }
                       alt={user.name || "User avatar"}
                       className="h-full w-full object-cover"
@@ -643,7 +643,7 @@ export const Dashboard: React.FC = () => {
                         src={
                           user.avatar_url.startsWith("http")
                             ? user.avatar_url
-                            : `${import.meta.env.VITE_API_URL}${user.avatar_url}`
+                            : `${import.meta.env.VITE_API_BASE_URL}${user.avatar_url}`
                         }
                         alt={user.name || "User avatar"}
                         className="h-full w-full object-cover"
