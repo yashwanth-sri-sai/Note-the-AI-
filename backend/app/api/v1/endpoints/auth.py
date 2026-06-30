@@ -29,8 +29,8 @@ def set_refresh_cookie(response: Response, token: str) -> None:
         key="refresh_token",
         value=token,
         httponly=True,
-        secure=is_production,
-        samesite="lax" if not is_production else "strict",
+        secure=is_production, # True in production
+        samesite="none" if is_production else "lax", # "none" allows cross-origin requests
         max_age=max_age,
         path="/",  # accessible by all backend routes
     )
@@ -43,7 +43,7 @@ def clear_refresh_cookie(response: Response) -> None:
         key="refresh_token",
         httponly=True,
         secure=is_production,
-        samesite="lax" if not is_production else "strict",
+        samesite="none" if is_production else "lax",
         path="/",
     )
 
