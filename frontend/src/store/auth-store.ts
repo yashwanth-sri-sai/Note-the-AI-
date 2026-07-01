@@ -103,11 +103,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await apiClient.post("/users/me/avatar", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+      const response = await apiClient.post("/users/me/avatar", formData);
       set({ user: response.data });
     } catch (error) {
       throw error;

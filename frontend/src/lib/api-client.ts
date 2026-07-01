@@ -6,9 +6,6 @@ const API_URL = RAW_API_URL.replace(/\/$/, ""); // Strip trailing slash if prese
 export const apiClient = axios.create({
   baseURL: `${API_URL}/api/v1`,
   withCredentials: true, // Send cookies (for refresh token HttpOnly cookies)
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
 console.log("MODE", import.meta.env.MODE);
@@ -18,9 +15,23 @@ console.log("Axios Base URL", apiClient.defaults.baseURL);
 console.log("Auth API Client", apiClient);
 
 apiClient.interceptors.request.use(config => {
-    console.log("REQUEST URL", config.baseURL + (config.url || ""));
+    console.log("==================");
+    console.log("FINAL AXIOS CONFIG");
+    console.log("==================");
+    console.log("URL", config.url);
     console.log("METHOD", config.method);
-    console.log("HEADERS", config.headers);
+    console.log("config.data", config.data);
+    console.log("config.data.constructor.name", config.data?.constructor?.name);
+    console.log("config.data instanceof FormData", config.data instanceof FormData);
+    console.log("typeof config.data", typeof config.data);
+    console.log("toString", Object.prototype.toString.call(config.data));
+    console.log("Headers", config.headers);
+
+    if (config.data instanceof FormData) {
+        for (const pair of (config.data as any).entries()) {
+            console.log(pair[0], pair[1]);
+        }
+    }
     return config;
 });
 
@@ -50,6 +61,20 @@ apiClient.interceptors.request.use(
     if (activeWorkspaceId) {
       config.headers["X-Workspace-ID"] = activeWorkspaceId;
     }
+    
+    console.log("===== REQUEST INTERCEPTOR =====");
+    console.log("URL:", config.url);
+    console.log("Method:", config.method);
+    console.log("Headers:", config.headers);
+    console.log("Data constructor:", config.data?.constructor?.name);
+    console.log("Is FormData:", config.data instanceof FormData);
+    console.log("Raw data:", config.data);
+    if (config.data instanceof FormData) {
+        for (const pair of (config.data as any).entries()) {
+            console.log(pair[0], pair[1]);
+        }
+    }
+    console.log("==============================");
     
     return config;
   },

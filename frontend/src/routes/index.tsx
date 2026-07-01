@@ -7,6 +7,7 @@ import { Register } from "@/pages/auth/Register";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { ResetPassword } from "@/pages/auth/ResetPassword";
 import { Dashboard } from "@/pages/dashboard/Dashboard";
+import TempUploadTest from "@/pages/dashboard/TempUploadTest";
 
 // 1. Protected Route Guard (Forces Login)
 export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
@@ -109,6 +110,7 @@ export const AppRoutes: React.FC = () => {
         />
 
         {/* Catch-all Fallback */}
+        <Route path="/test-upload" element={<TempUploadTest />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
