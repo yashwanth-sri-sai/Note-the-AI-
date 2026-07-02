@@ -60,11 +60,3 @@ class ChatResponse(BaseModel):
     user_message: MessageResponse
     assistant_message: MessageResponse
     references: List[ChatRetrievalReference] = []
-
-
-class RetrievalDebugResponse(BaseModel):
-    references: List[ChatRetrievalReference]
-    retrieval_latency_ms: float
-    retrieval_count: int
-    total_context_tokens: int
-

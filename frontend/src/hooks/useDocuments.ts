@@ -32,18 +32,8 @@ export const useUploadDocument = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (file: File) => {
-      console.log("FILE", file);
-      console.log("instanceof File", file instanceof File);
-      console.log("constructor", file.constructor.name);
-      
       const formData = new FormData();
       formData.append("file", file);
-      
-      console.log("FORMDATA", formData);
-      console.log("instanceof FormData", formData instanceof FormData);
-      for (const p of formData.entries()) {
-          console.log(p[0], p[1]);
-      }
 
       const response = await apiClient.post("/documents/upload", formData);
       return response.data;

@@ -8,24 +8,7 @@ export const apiClient = axios.create({
   withCredentials: true, // Send cookies (for refresh token HttpOnly cookies)
 });
 
-console.log("MODE", import.meta.env.MODE);
-console.log("VITE_API_URL", import.meta.env.VITE_API_URL);
-console.log("VITE_API_BASE_URL", import.meta.env.VITE_API_BASE_URL);
-console.log("Axios Base URL", apiClient.defaults.baseURL);
-console.log("Auth API Client", apiClient);
-
 apiClient.interceptors.request.use(config => {
-    console.log("==================");
-    console.log("FINAL AXIOS CONFIG");
-    console.log("==================");
-    console.log("URL", config.url);
-    console.log("METHOD", config.method);
-    console.log("config.data", config.data);
-    console.log("config.data.constructor.name", config.data?.constructor?.name);
-    console.log("config.data instanceof FormData", config.data instanceof FormData);
-    console.log("typeof config.data", typeof config.data);
-    console.log("toString", Object.prototype.toString.call(config.data));
-    console.log("Headers", config.headers);
 
     if (config.data instanceof FormData) {
         for (const pair of (config.data as any).entries()) {

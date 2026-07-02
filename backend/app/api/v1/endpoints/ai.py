@@ -17,7 +17,6 @@ from app.schemas.ai import (
     KnowledgeGraphEdgeResponse,
     KnowledgeGraphEdgeCreate,
 )
-from app.schemas.chat import RetrievalDebugResponse
 from app.services.retrieval import RetrievalService
 from app.services.ai import AIService
 import time
@@ -89,80 +88,6 @@ async def semantic_search(
         )
         raise e
 
-
-@router.post("/retrieve-debug", response_model=RetrievalDebugResponse)
-@limiter.limit("60/minute")
-async def retrieve_debug(
-    request: Request,
-    payload: AISearchRequest,
-    current_user: User = Depends(get_current_user),
-    workspace_id: UUID = Depends(get_current_workspace_id),
-    db: AsyncSession = Depends(get_db),
-):
-    """Debug retrieval engine, returning cosine similarity scores, character offsets, and token budget analytics."""
-    import time
-    import asyncio
-    from app.services.metrics import log_request_metrics_task
-
-    start_time = time.perf_counter()
-    client_ip = request.client.host if request.client else None
-    retrieval_service = RetrievalService(db)
-    
-    try:
-        retrieval_start = time.perf_counter()
-        references = await retrieval_service.retrieve_context(workspace_id, payload.query, payload.limit)
-        retrieval_latency_ms = (time.perf_counter() - retrieval_start) * 1000.0
-        
-        total_tokens = sum([ref.get("token_count", 0) for ref in references])
-        total_response_ms = (time.perf_counter() - start_time) * 1000.0
-        
-        asyncio.create_task(
-            log_request_metrics_task(
-                user_id=current_user.id,
-                workspace_id=workspace_id,
-                endpoint="/retrieve-debug",
-                method="POST",
-                status_code=200,
-                client_ip=client_ip,
-                total_response_ms=total_response_ms,
-                retrieval_latency_ms=retrieval_latency_ms,
-                llm_latency_ms=0.0,
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=total_tokens,
-                provider="None",
-                model_name="None"
-            )
-        )
-        
-        return {
-            "references": references,
-            "retrieval_latency_ms": retrieval_latency_ms,
-            "retrieval_count": len(references),
-            "total_context_tokens": total_tokens
-        }
-    except Exception as e:
-        total_response_ms = (time.perf_counter() - start_time) * 1000.0
-        asyncio.create_task(
-            log_request_metrics_task(
-                user_id=current_user.id if current_user else None,
-                workspace_id=workspace_id,
-                endpoint="/retrieve-debug",
-                method="POST",
-                status_code=500,
-                client_ip=client_ip,
-                total_response_ms=total_response_ms,
-                retrieval_latency_ms=total_response_ms,
-                llm_latency_ms=0.0,
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_tokens=0,
-                provider="None",
-                model_name="None",
-                error_message=str(e)
-            )
-        )
-        raise e
 
 
 # =========================================================================
