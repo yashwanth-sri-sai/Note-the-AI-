@@ -88,8 +88,8 @@ async def test_context_builder():
     cb = ContextBuilder(token_limit=1000)
     context_str, references = cb.build_context(raw_refs)
 
-    # De-duplication assert
-    assert len(references) == 3, f"Expected 3 references after de-duplication, got {len(references)}"
+    # De-duplication assert (moved to retrieval.py)
+    assert len(references) == 4, f"Expected 4 references after context budget sorting, got {len(references)}"
     assert references[0]["chunk_uuid"] == chunk1_uuid
     assert references[0]["similarity_score"] == 0.95, "Should keep the higher similarity score reference"
     
@@ -238,9 +238,12 @@ async def test_retrieval_and_rag_persistence():
             rag_service = RAGGenerationService(db)
 
             # Test Confidence Heuristics
-            high_conf = rag_service._calculate_confidence([{"similarity_score": 0.85}, {"similarity_score": 0.82}])
-            med_conf = rag_service._calculate_confidence([{"similarity_score": 0.72}])
-            low_conf = rag_service._calculate_confidence([{"similarity_score": 0.55}])
+            # High base score + 2 supporting + 1 diversity = HIGH
+            high_conf = rag_service._calculate_confidence([{"similarity_score": 0.85, "document_id": "1"}, {"similarity_score": 0.82, "document_id": "2"}])
+            # Base 0.55 + 0 supporting + 0 diversity = 0.55 (MEDIUM)
+            med_conf = rag_service._calculate_confidence([{"similarity_score": 0.55, "document_id": "1"}])
+            # Base 0.40 + 0 supporting + 0 diversity = 0.40 (LOW)
+            low_conf = rag_service._calculate_confidence([{"similarity_score": 0.40, "document_id": "1"}])
 
             assert high_conf == "HIGH", f"Expected HIGH, got {high_conf}"
             assert med_conf == "MEDIUM", f"Expected MEDIUM, got {med_conf}"

@@ -83,17 +83,33 @@ class RetrievalService:
                 "source_reference": row.source_reference
             })
             
-        # 4. Deduplicate candidates using MD5 hash before sending to reranker (saves API costs)
-        import hashlib
-        seen_hashes = set()
+        # 4. Deduplicate candidates using overlap check before sending to reranker (saves API costs)
         deduped_candidates = []
         for chunk in raw_candidates:
             text_val = chunk.get("chunk_text", "").strip()
             if not text_val:
                 continue
-            text_hash = hashlib.md5(text_val.encode('utf-8')).hexdigest()
-            if text_hash not in seen_hashes:
-                seen_hashes.add(text_hash)
+                
+            is_duplicate = False
+            set1 = frozenset(text_val.lower().split())
+            if not set1:
+                continue
+                
+            for accepted in deduped_candidates:
+                accepted_text = accepted.get("chunk_text", "").strip()
+                set2 = frozenset(accepted_text.lower().split())
+                if not set2:
+                    continue
+                    
+                overlap = len(set1.intersection(set2))
+                min_len = min(len(set1), len(set2))
+                
+                # If > 75% of the smaller chunk's tokens are present in the other, it's a sliding window duplicate
+                if min_len > 0 and (overlap / min_len) > 0.75:
+                    is_duplicate = True
+                    break
+            
+            if not is_duplicate:
                 deduped_candidates.append(chunk)
             
         # 5. Apply reranker to filter and sort down to the top limit (default 10)

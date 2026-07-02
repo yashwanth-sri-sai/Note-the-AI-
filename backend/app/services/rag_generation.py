@@ -28,15 +28,32 @@ class RAGGenerationService:
         self.gemini_model = settings.GEMINI_MODEL or os.getenv("GEMINI_CHAT_MODEL", "gemini-2.5-flash-lite")
 
     def _calculate_confidence(self, references: List[Dict[str, Any]]) -> str:
-        """Calculate confidence level (LOW, MEDIUM, HIGH) based on average similarity score."""
+        """Calculate confidence level (LOW, MEDIUM, HIGH) using a composite formula."""
         if not references:
             return "LOW"
-        scores = [ref.get("similarity_score", 0.0) for ref in references[:3]]
-        avg_score = sum(scores) / len(scores)
+            
+        # 1. Base Score: Maximum similarity score
+        scores = [ref.get("similarity_score", 0.0) for ref in references]
+        max_score = max(scores) if scores else 0.0
         
-        if avg_score >= 0.70:
+        # 2. Citation Diversity Bonus (+0.05 per unique document up to +0.15)
+        top_5_refs = references[:5]
+        unique_docs = set(str(ref.get("document_id", "")) for ref in top_5_refs if ref.get("document_id"))
+        diversity_bonus = min(0.15, max(0, len(unique_docs) - 1) * 0.05)
+        
+        # 3. Depth/Support Bonus (+0.02 for each supporting chunk > 0.50, up to +0.10)
+        supporting_chunks = sum(1 for s in scores[1:5] if s >= 0.50)
+        depth_bonus = min(0.10, supporting_chunks * 0.02)
+        
+        # 4. Composite Calculation
+        composite_score = max_score + diversity_bonus + depth_bonus
+        
+        # Clamp between 0 and 1
+        composite_score = min(1.0, max(0.0, composite_score))
+        
+        if composite_score >= 0.70:
             return "HIGH"
-        elif avg_score >= 0.50:
+        elif composite_score >= 0.50:
             return "MEDIUM"
         else:
             return "LOW"

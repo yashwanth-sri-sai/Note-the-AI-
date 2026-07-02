@@ -74,12 +74,22 @@ async def run_evaluation_for_case(workspace_id: uuid.UUID, test_case: Dict[str, 
         
         # Compute RAG Confidence (same logic as rag_generation.py)
         confidence = "LOW"
-        top_chunks = accepted_chunks[:3]
-        if top_chunks:
-            avg_score = sum(c.get("similarity_score", 0.0) for c in top_chunks) / len(top_chunks)
-            if avg_score >= 0.70:
+        if accepted_chunks:
+            scores = [c.get("similarity_score", 0.0) for c in accepted_chunks]
+            max_score = max(scores) if scores else 0.0
+            
+            top_5_refs = accepted_chunks[:5]
+            unique_docs = set(str(c.get("document_id", "")) for c in top_5_refs if c.get("document_id"))
+            diversity_bonus = min(0.15, max(0, len(unique_docs) - 1) * 0.05)
+            
+            supporting_chunks = sum(1 for s in scores[1:5] if s >= 0.50)
+            depth_bonus = min(0.10, supporting_chunks * 0.02)
+            
+            composite_score = min(1.0, max(0.0, max_score + diversity_bonus + depth_bonus))
+            
+            if composite_score >= 0.70:
                 confidence = "HIGH"
-            elif avg_score >= 0.50:
+            elif composite_score >= 0.50:
                 confidence = "MEDIUM"
                 
     # 4. Run Evaluation Metrics
