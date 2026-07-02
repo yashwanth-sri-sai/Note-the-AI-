@@ -3,7 +3,7 @@ from app.services.token_estimator import TokenService
 
 
 class ContextBuilder:
-    def __init__(self, token_limit: int = 4000):
+    def __init__(self, token_limit: int = 30000):
         self.token_limit = token_limit
 
     def build_context(self, chunks: List[Dict[str, Any]]) -> Tuple[str, List[Dict[str, Any]]]:

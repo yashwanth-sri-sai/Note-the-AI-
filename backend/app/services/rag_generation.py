@@ -34,9 +34,9 @@ class RAGGenerationService:
         scores = [ref.get("similarity_score", 0.0) for ref in references[:3]]
         avg_score = sum(scores) / len(scores)
         
-        if avg_score >= 0.82:
+        if avg_score >= 0.70:
             return "HIGH"
-        elif avg_score >= 0.65:
+        elif avg_score >= 0.50:
             return "MEDIUM"
         else:
             return "LOW"
@@ -119,7 +119,7 @@ class RAGGenerationService:
                     content=question
                 )
                 self.db.add(user_msg)
-                await self.db.flush()
+                await self.db.commit()
 
             # 3. Retrieve matching segments
             retrieval_start = time.perf_counter()
@@ -225,7 +225,7 @@ class RAGGenerationService:
             generated_text = ""
             
             async def _call_openai():
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=60.0) as client:
                     headers = {
                         "Content-Type": "application/json",
                         "Authorization": f"Bearer {self.openai_key}"
@@ -236,7 +236,8 @@ class RAGGenerationService:
                             {"role": "system", "content": system_instruction},
                             {"role": "user", "content": user_prompt}
                         ],
-                        "temperature": 0.0
+                        "temperature": 0.0,
+                        "max_tokens": 4096
                     }
                     response = await client.post(
                         "https://api.openai.com/v1/chat/completions",
@@ -249,7 +250,7 @@ class RAGGenerationService:
                     return data["choices"][0]["message"]["content"].strip()
 
             async def _call_gemini():
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=60.0) as client:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent"
                     params = {"key": self.gemini_key}
                     full_prompt = f"{system_instruction}\n\n{user_prompt}"
@@ -258,7 +259,8 @@ class RAGGenerationService:
                             {"role": "user", "parts": [{"text": full_prompt}]}
                         ],
                         "generationConfig": {
-                            "temperature": 0.0
+                            "temperature": 0.0,
+                            "maxOutputTokens": 4096
                         }
                     }
                     response = await client.post(url, params=params, json=payload)
@@ -424,7 +426,7 @@ class RAGGenerationService:
                 content=question
             )
             self.db.add(user_msg)
-            await self.db.flush()
+            await self.db.commit()
 
         # 3. Retrieve matching segments
         retrieval_start = time.perf_counter()
@@ -541,16 +543,17 @@ class RAGGenerationService:
                 print("USING GEMINI")
                 print("PROVIDER CALL START")
                 model_used = self.gemini_model
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=60.0) as client:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:streamGenerateContent"
-                    params = {"key": self.gemini_key}
+                    params = {"key": self.gemini_key, "alt": "sse"}
                     full_prompt = f"{system_instruction}\n\n{user_prompt}"
                     payload = {
                         "contents": [
                             {"role": "user", "parts": [{"text": full_prompt}]}
                         ],
                         "generationConfig": {
-                            "temperature": 0.0
+                            "temperature": 0.0,
+                            "maxOutputTokens": 4096
                         }
                     }
                     
@@ -564,27 +567,20 @@ class RAGGenerationService:
                     
                     try:
                         response = await retry_with_backoff(_send_gemini_stream, client)
-                        # Gemini streamGenerateContent returns a single JSON array
-                        # e.g. [{...chunk1...},\n{...chunk2...}]
-                        # We must buffer the full body and parse the array — NOT parse line-by-line.
-                        raw_body = await response.aread()
-                        await response.aclose()
-                        print(f"PROVIDER RESPONSE RAW (first 500 chars): {raw_body[:500]}")
-                        try:
-                            chunks = json.loads(raw_body.decode("utf-8"))
-                            if not isinstance(chunks, list):
-                                chunks = [chunks]
-                            for chunk_json in chunks:
+                        async for line in response.aiter_lines():
+                            if line.startswith("data: "):
+                                data_str = line[6:].strip()
+                                if data_str == "[DONE]":
+                                    break
                                 try:
+                                    chunk_json = json.loads(data_str)
                                     delta = chunk_json["candidates"][0]["content"]["parts"][0]["text"]
                                     if delta:
                                         generated_text += delta
                                         yield f"data: {json.dumps({'type': 'content', 'delta': delta})}\n\n"
                                 except (KeyError, IndexError):
                                     pass
-                        except json.JSONDecodeError as json_err:
-                            print(f"Gemini JSON parse error: {json_err}. Raw body: {raw_body[:300]}")
-                            raise Exception(f"Gemini response JSON parse failed: {json_err}")
+                        await response.aclose()
                         print("PROVIDER CALL SUCCESS")
                     except Exception as gemini_err:
                         print("PROVIDER CALL FAILED")
@@ -602,7 +598,7 @@ class RAGGenerationService:
                 print("USING OPENAI")
                 print("PROVIDER CALL START")
                 model_used = self.openai_model
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=60.0) as client:
                     headers = {
                         "Content-Type": "application/json",
                         "Authorization": f"Bearer {self.openai_key}"
@@ -614,6 +610,7 @@ class RAGGenerationService:
                             {"role": "user", "content": user_prompt}
                         ],
                         "temperature": 0.0,
+                        "max_tokens": 4096,
                         "stream": True
                     }
                     
