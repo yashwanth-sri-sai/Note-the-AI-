@@ -179,10 +179,6 @@ export const NotebookLMChat: React.FC = () => {
   const fetchMessages = async (convId: string) => {
     setIsMessagesLoading(true);
     try {
-      console.log("convId =", convId);
-      console.log("typeof =", typeof convId);
-      console.log("length =", convId?.length);
-      console.log("URL =", `/chat/conversations/${convId}/messages`);
       const response = await apiClient.get(`/chat/conversations/${convId}/messages`);
       setMessages(response.data);
     } catch (error) {
@@ -299,32 +295,44 @@ export const NotebookLMChat: React.FC = () => {
     setMessages((prev) => [...prev, assistantPlaceholder]);
 
     // Start Fetching stream
-    const token = getAccessToken();
     const activeWorkspace = activeWorkspaceId;
     const apiURL = apiClient.defaults.baseURL;
 
     try {
-      console.log("convId =", convId);
-      console.log("typeof =", typeof convId);
-      console.log("length =", convId?.length);
-      console.log("URL =", `/chat/conversations/${convId}/messages`);
-      const response = await fetch(`${apiURL}/chat/conversations/${convId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-          ...(activeWorkspace ? { "X-Workspace-ID": activeWorkspace } : {}),
-        },
-        body: JSON.stringify({
-          content: finalQuery,
-          document_ids: selectedDocIds.length > 0 ? selectedDocIds : undefined,
-          note_ids: selectedNoteIds.length > 0 ? selectedNoteIds : undefined,
-          file_types: selectedFileTypes.length > 0 ? selectedFileTypes : undefined,
-          date_start: dateStart ? new Date(dateStart).toISOString() : undefined,
-          date_end: dateEnd ? new Date(dateEnd).toISOString() : undefined,
-          stream: true
-        })
-      });
+      const getFetchOptions = () => {
+        const currentToken = getAccessToken();
+
+        return {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            ...(currentToken ? { "Authorization": `Bearer ${currentToken}` } : {}),
+            ...(activeWorkspace ? { "X-Workspace-ID": activeWorkspace } : {}),
+          },
+          credentials: "include" as RequestCredentials,
+          body: JSON.stringify({
+            content: finalQuery,
+            document_ids: selectedDocIds.length > 0 ? selectedDocIds : undefined,
+            note_ids: selectedNoteIds.length > 0 ? selectedNoteIds : undefined,
+            file_types: selectedFileTypes.length > 0 ? selectedFileTypes : undefined,
+            date_start: dateStart ? new Date(dateStart).toISOString() : undefined,
+            date_end: dateEnd ? new Date(dateEnd).toISOString() : undefined,
+            stream: true
+          })
+        };
+      };
+
+      let response = await fetch(`${apiURL}/chat/conversations/${convId}/messages`, getFetchOptions());
+
+      if (response.status === 401) {
+        try {
+          await apiClient.get("/users/me");
+          response = await fetch(`${apiURL}/chat/conversations/${convId}/messages`, getFetchOptions());
+        } catch (refreshError) {
+          throw new Error("Session expired. Please log in again.");
+        }
+      }
 
       if (!response.ok) {
         throw new Error(`Server returned error status ${response.status}`);

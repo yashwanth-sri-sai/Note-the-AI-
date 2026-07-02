@@ -221,23 +221,39 @@ export const NotesPage: React.FC = () => {
     };
     setCopilotMessages((prev) => [...prev, assistantPlaceholder]);
 
-    const token = getAccessToken();
     const activeWorkspace = useWorkspaceStore.getState().activeWorkspaceId;
     const apiURL = apiClient.defaults.baseURL;
 
     try {
-      const response = await fetch(`${apiURL}/chat/conversations/${convId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
-          ...(activeWorkspace ? { "X-Workspace-ID": activeWorkspace } : {}),
-        },
-        body: JSON.stringify({
-          content: queryToSend,
-          stream: true
-        })
-      });
+      const getFetchOptions = () => {
+        const currentToken = getAccessToken();
+
+        return {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+            ...(currentToken ? { "Authorization": `Bearer ${currentToken}` } : {}),
+            ...(activeWorkspace ? { "X-Workspace-ID": activeWorkspace } : {}),
+          },
+          credentials: "include" as RequestCredentials,
+          body: JSON.stringify({
+            content: queryToSend,
+            stream: true
+          })
+        };
+      };
+
+      let response = await fetch(`${apiURL}/chat/conversations/${convId}/messages`, getFetchOptions());
+
+      if (response.status === 401) {
+        try {
+          await apiClient.get("/users/me");
+          response = await fetch(`${apiURL}/chat/conversations/${convId}/messages`, getFetchOptions());
+        } catch (refreshError) {
+          throw new Error("Session expired. Please log in again.");
+        }
+      }
 
       if (!response.ok) throw new Error("Failed to send message");
 

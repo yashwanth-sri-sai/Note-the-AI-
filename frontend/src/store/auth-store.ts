@@ -111,17 +111,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   initAuth: async () => {
-    console.log("[initAuth] started");
     try {
       const userResponse = await apiClient.get("/users/me");
-      console.log("[initAuth] /users/me success:", userResponse.data);
       set({
         user: userResponse.data,
         isAuthenticated: true,
         isLoading: false,
       });
     } catch (err) {
-      console.log("[initAuth] /users/me failed:", err);
       setAccessToken(null);
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
