@@ -1,0 +1,16 @@
+[
+  {
+    "id": "tc-001",
+    "question": "What is the capital of France?",
+    "expected_answer": "The capital of France is Paris.",
+    "expected_citations": ["Geography Text.pdf"],
+    "relevant_pages": [1, 2]
+  },
+  {
+    "id": "tc-002",
+    "question": "How does the RAG system handle duplicates?",
+    "expected_answer": "It removes duplicates using an MD5 hash of the chunk text before reranking.",
+    "expected_citations": ["Architecture Overview.pdf"],
+    "relevant_pages": [4]
+  }
+]
