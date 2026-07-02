@@ -1,11 +1,11 @@
 import hashlib
 from typing import List, Dict, Any, Tuple
 from app.services.token_estimator import TokenService
-
+from app.core.config import settings
 
 class ContextBuilder:
-    def __init__(self, token_limit: int = 30000):
-        self.token_limit = token_limit
+    def __init__(self, token_limit: int = None):
+        self.token_limit = token_limit or settings.DEFAULT_CONTEXT_TOKEN_LIMIT
 
     def build_context(self, chunks: List[Dict[str, Any]]) -> Tuple[str, List[Dict[str, Any]]]:
         """Sort by relevance, cap within the token budget, and format the context strings.

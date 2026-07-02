@@ -12,6 +12,7 @@ class MessageCreate(BaseModel):
     date_start: Optional[datetime] = None
     date_end: Optional[datetime] = None
     stream: Optional[bool] = False
+    use_multi_query: Optional[bool] = False
 
 
 

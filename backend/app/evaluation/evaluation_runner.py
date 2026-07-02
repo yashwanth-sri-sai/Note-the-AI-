@@ -2,10 +2,10 @@ import uuid
 import time
 import httpx
 from typing import Dict, Any
-from app.db.session import async_session_maker
+from app.db.session import async_session_factory
 from app.services.retrieval import RetrievalService
 from app.services.context_builder import ContextBuilder
-from app.services.rag_generation import RAGService
+from app.services.rag_generation import RAGGenerationService
 from app.evaluation.metrics import (
     evaluate_faithfulness_and_relevancy, 
     calculate_retrieval_metrics, 
@@ -23,7 +23,7 @@ async def run_evaluation_for_case(workspace_id: uuid.UUID, test_case: Dict[str, 
     start_time = time.perf_counter()
     time_to_first_token = 0.0
     
-    async with async_session_maker() as db:
+    async with async_session_factory() as db:
         retrieval_service = RetrievalService(db)
         
         # 1. Retrieval + Reranker

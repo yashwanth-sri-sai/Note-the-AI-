@@ -84,7 +84,8 @@ async def send_message_rag(
             date_start=payload.date_start,
             date_end=payload.date_end,
             conversation_id=conversation_id,
-            user_id=current_user.id
+            user_id=current_user.id,
+            use_multi_query=payload.use_multi_query
         )
         return StreamingResponse(generator, media_type="text/event-stream")
         
@@ -98,7 +99,8 @@ async def send_message_rag(
         date_start=payload.date_start,
         date_end=payload.date_end,
         conversation_id=conversation_id,
-        user_id=current_user.id
+        user_id=current_user.id,
+        use_multi_query=payload.use_multi_query
     )
     
     # Reload user and assistant messages to return them in schema format

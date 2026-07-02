@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Union[str, None] = None
     GEMINI_MODEL: str = "gemini-2.5-flash-lite"
 
-
+    # RAG Settings
+    DEFAULT_CONTEXT_TOKEN_LIMIT: int = 30000
+    DEBUG_RAG: bool = False
 
 settings = Settings()

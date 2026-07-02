@@ -12,6 +12,9 @@ from app.db.models.chat import Message
 from app.db.models.note import Note
 from app.core.retries import retry_with_backoff
 from app.core.config import settings
+import logging
+
+logger = logging.getLogger("rag_diagnostics")
 
 
 
@@ -114,6 +117,144 @@ class RAGGenerationService:
             })
         return note_chunks
 
+    async def _verify_context_sufficiency(self, question: str, context_str: str) -> bool:
+        """
+        Runs a fast LLM pre-check using Gemini/OpenAI to ensure context contains 
+        the answer to prevent hallucination. Returns True if sufficient, False if not.
+        """
+        import httpx
+        import json
+        
+        prompt = (
+            "You are a RAG QA verifier.\n\n"
+            "Your job is to decide whether the retrieved context contains enough information to answer the user question.\n\n"
+            "RULES:\n"
+            "- You MUST NOT answer the question.\n"
+            "- You only evaluate retrieval quality.\n\n"
+            "INPUT:\n"
+            f"Question:\n{question}\n\n"
+            f"Retrieved Context Chunks:\n{context_str}\n\n"
+            "TASK:\n"
+            "1. Check if the answer exists explicitly OR can be directly inferred.\n"
+            "2. If YES, return:\n"
+            "   {\n"
+            "     \"decision\": \"SUFFICIENT\",\n"
+            "     \"missing_info\": []\n"
+            "   }\n"
+            "3. If NO, return:\n"
+            "   {\n"
+            "     \"decision\": \"INSUFFICIENT\",\n"
+            "     \"missing_info\": [\"what is missing\"]\n"
+            "   }\n"
+            "4. Be strict: partial semantic similarity is NOT sufficient.\n"
+            "5. Only mark SUFFICIENT if:\n"
+            "   - at least 1 chunk directly contains the answer\n"
+            "   OR\n"
+            "   - 2+ chunks together fully contain the answer\n\n"
+            "OUTPUT FORMAT (STRICT JSON ONLY)"
+        )
+        
+        try:
+            if self.gemini_key:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent"
+                    params = {"key": self.gemini_key}
+                    payload = {
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"temperature": 0.0}
+                    }
+                    response = await client.post(url, params=params, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    text_response = data["candidates"][0]["content"]["parts"][0]["text"]
+                    text_response = text_response.strip().replace("```json", "").replace("```", "").strip()
+                    result = json.loads(text_response)
+                    return result.get("decision") == "SUFFICIENT"
+            elif self.openai_key:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.openai_key}"
+                    }
+                    payload = {
+                        "model": "gpt-4o-mini", # use fast model for verifier if available
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.0,
+                        "response_format": {"type": "json_object"}
+                    }
+                    response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    result = json.loads(data["choices"][0]["message"]["content"])
+                    return result.get("decision") == "SUFFICIENT"
+        except Exception as e:
+            # If verifier fails (timeout/parsing), default to SUFFICIENT to not block normal generation
+            print(f"QA Verifier failed: {e}")
+            pass
+            
+        return True
+
+    async def _generate_expanded_queries(self, question: str) -> List[str]:
+        """
+        Uses the LLM to generate expanded search queries for retry.
+        Returns a list of 2 strings: a simplified version, and a keyword-only version.
+        """
+        import httpx
+        import json
+        
+        prompt = (
+            "You are a search query expansion assistant.\n"
+            "Given a user question, generate exactly 2 query variations to maximize retrieval recall.\n"
+            "The variations must be:\n"
+            "1. A simplified version of the question.\n"
+            "2. A keyword-only version (just the most important entities/nouns).\n"
+            "Do NOT include the original question in the output.\n"
+            "Output MUST be a strictly valid JSON array of 2 strings. Example: [\"simplified\", \"keyword1 keyword2\"]\n\n"
+            f"Question: {question}"
+        )
+        try:
+            if self.gemini_key:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent"
+                    params = {"key": self.gemini_key}
+                    payload = {
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {"temperature": 0.5}
+                    }
+                    response = await client.post(url, params=params, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    text_response = data["candidates"][0]["content"]["parts"][0]["text"]
+                    text_response = text_response.strip().replace("```json", "").replace("```", "").strip()
+                    return json.loads(text_response)
+            elif self.openai_key:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.openai_key}"
+                    }
+                    payload = {
+                        "model": "gpt-4o-mini",
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.5,
+                        "response_format": {"type": "json_object"}
+                    }
+                    
+                    # Update prompt for OpenAI specifically to return an object because of json_object mode
+                    oai_prompt = prompt.replace("valid JSON array of 2 strings", "JSON object with a 'queries' array of 2 strings").replace("Example: [\"simplified\", \"keyword1 keyword2\"]", "Example: {\"queries\": [\"simplified\", \"keyword1 keyword2\"]}")
+                    payload["messages"][0]["content"] = oai_prompt
+                    
+                    response = await client.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
+                    response.raise_for_status()
+                    data = response.json()
+                    res_obj = json.loads(data["choices"][0]["message"]["content"])
+                    return res_obj.get("queries", [question, question])
+        except Exception as e:
+            print(f"Query expansion failed: {e}")
+            pass
+            
+        return [question, question]
+
     async def generate_answer(
         self,
         workspace_id: uuid.UUID,
@@ -125,6 +266,7 @@ class RAGGenerationService:
         date_end: Optional[datetime] = None,
         conversation_id: Optional[uuid.UUID] = None,
         user_id: Optional[uuid.UUID] = None,
+        use_multi_query: bool = False,
     ) -> Tuple[str, List[Dict[str, Any]], str]:
         """Synchronously generate a cited RAG answer and persist user and assistant messages in the DB."""
         import time
@@ -158,37 +300,65 @@ class RAGGenerationService:
             # 3. Retrieve matching segments
             retrieval_start = time.perf_counter()
             raw_references = []
+            
+            diagnostics = {
+                "query": question,
+                "expanded_queries": [],
+                "retrieval_count_before_rerank": 0,
+                "retrieval_count_after_dedup": 0,
+                "retrieval_count_after_rerank": 0,
+                "context_token_count": 0,
+                "number_of_llm_calls": 0,
+                "latency_per_stage": {}
+            }
+            
+            queries_to_run = [question]
+            search_limit = 10
+            if use_multi_query:
+                t0 = time.perf_counter()
+                expanded = await self._generate_expanded_queries(question)
+                diagnostics["expanded_queries"] = expanded
+                diagnostics["latency_per_stage"]["query_expansion_ms"] = round((time.perf_counter() - t0) * 1000.0, 2)
+                diagnostics["number_of_llm_calls"] += 1
+                queries_to_run.extend(expanded)
+                search_limit = 50
+                
+            query_arg = queries_to_run if use_multi_query else question
 
             # Retrieve from documents if specified
             if document_ids:
                 raw_references = await self.retrieval_service.retrieve_context(
                     workspace_id=workspace_id,
-                    query=question,
-                    limit=10,
+                    query=query_arg,
+                    limit=search_limit,
                     document_ids=document_ids,
                     file_types=file_types,
                     date_start=date_start,
-                    date_end=date_end
+                    date_end=date_end,
+                    diagnostics=diagnostics
                 )
             elif document_ids is None:
                 # If no filter is applied at all, scan all documents (only if no notes are selected)
                 if not note_ids:
                     raw_references = await self.retrieval_service.retrieve_context(
                         workspace_id=workspace_id,
-                        query=question,
-                        limit=10,
+                        query=query_arg,
+                        limit=search_limit,
                         document_ids=None,
                         file_types=file_types,
                         date_start=date_start,
-                        date_end=date_end
+                        date_end=date_end,
+                        diagnostics=diagnostics
                     )
 
             # Append note contexts if selected
             if note_ids:
-                note_refs = await self._retrieve_notes_context(workspace_id, note_ids, question)
+                note_refs = await self._retrieve_notes_context(workspace_id, note_ids, query_arg)
                 raw_references.extend(note_refs)
+                diagnostics["retrieval_count_after_rerank"] += len(note_refs)
 
             retrieval_latency_ms = (time.perf_counter() - retrieval_start) * 1000.0
+            diagnostics["latency_per_stage"]["total_retrieval_ms"] = round(retrieval_latency_ms, 2)
             
             if not raw_references:
                 no_context_msg = (
@@ -229,12 +399,41 @@ class RAGGenerationService:
                 return no_context_msg, [], "LOW"
 
             # 4. Assemble context using ContextBuilder
-            context_builder = ContextBuilder(token_limit=4000)
+            t0 = time.perf_counter()
+            context_builder = ContextBuilder()
             context_str, references = context_builder.build_context(raw_references)
             references = self._make_references_serializable(references)
+            diagnostics["latency_per_stage"]["context_build_ms"] = round((time.perf_counter() - t0) * 1000.0, 2)
+            diagnostics["context_token_count"] = sum(r.get("token_count", 0) for r in references)
             
             # 5. Calculate confidence score
             confidence = self._calculate_confidence(references)
+
+            # 5.5. Verify context sufficiency conditionally to save LLM calls
+            is_sufficient = True
+            if confidence != "HIGH":
+                avg_similarity = sum(r.get("similarity_score", 0.0) for r in references) / len(references) if references else 0.0
+                if avg_similarity < 0.65 or len(references) < 5:
+                    safe_question = question.replace("<", "&lt;").replace(">", "&gt;")
+                    t0 = time.perf_counter()
+                    is_sufficient = await self._verify_context_sufficiency(safe_question, context_str)
+                    diagnostics["latency_per_stage"]["qa_verifier_ms"] = round((time.perf_counter() - t0) * 1000.0, 2)
+                    diagnostics["number_of_llm_calls"] += 1
+
+            if not is_sufficient:
+                fallback_msg = "I could not find sufficient information in the uploaded documents."
+                if conversation_id:
+                    assistant_msg = Message(
+                        conversation_id=conversation_id,
+                        sender_role="assistant",
+                        content=fallback_msg,
+                        model_used="None",
+                        retrieved_chunks=references,
+                        citation_metadata={"confidence_score": "LOW"}
+                    )
+                    self.db.add(assistant_msg)
+                    await self.db.commit()
+                return fallback_msg, references, "LOW"
 
             system_instruction = (
                 "You are NoteAI, a production-grade citation-aware AI knowledge assistant.\n"
@@ -370,6 +569,13 @@ class RAGGenerationService:
             total_tokens = prompt_tokens + completion_tokens
 
             total_response_ms = (time.perf_counter() - start_time) * 1000.0
+            
+            diagnostics["latency_per_stage"]["generation_ms"] = round(llm_latency_ms, 2)
+            diagnostics["latency_per_stage"]["total_ms"] = round(total_response_ms, 2)
+            diagnostics["number_of_llm_calls"] += 1
+            if settings.DEBUG_RAG:
+                logger.info(json.dumps(diagnostics))
+
             asyncio.create_task(
                 log_request_metrics_task(
                     user_id=user_id,
@@ -423,6 +629,7 @@ class RAGGenerationService:
         date_end: Optional[datetime] = None,
         conversation_id: Optional[uuid.UUID] = None,
         user_id: Optional[uuid.UUID] = None,
+        use_multi_query: bool = False,
     ) -> AsyncGenerator[str, None]:
         """Stream RAG answers in SSE format, yielding text tokens and final metadata footnotes, and persist context."""
         import time
@@ -454,37 +661,65 @@ class RAGGenerationService:
         # 3. Retrieve matching segments
         retrieval_start = time.perf_counter()
         raw_references = []
+        
+        diagnostics = {
+            "query": question,
+            "expanded_queries": [],
+            "retrieval_count_before_rerank": 0,
+            "retrieval_count_after_dedup": 0,
+            "retrieval_count_after_rerank": 0,
+            "context_token_count": 0,
+            "number_of_llm_calls": 0,
+            "latency_per_stage": {}
+        }
+        
+        queries_to_run = [question]
+        search_limit = 10
+        if use_multi_query:
+            t0 = time.perf_counter()
+            expanded = await self._generate_expanded_queries(question)
+            diagnostics["expanded_queries"] = expanded
+            diagnostics["latency_per_stage"]["query_expansion_ms"] = round((time.perf_counter() - t0) * 1000.0, 2)
+            diagnostics["number_of_llm_calls"] += 1
+            queries_to_run.extend(expanded)
+            search_limit = 50
+            
+        query_arg = queries_to_run if use_multi_query else question
 
         # Retrieve from documents if specified
         if document_ids:
             raw_references = await self.retrieval_service.retrieve_context(
                 workspace_id=workspace_id,
-                query=question,
-                limit=10,
+                query=query_arg,
+                limit=search_limit,
                 document_ids=document_ids,
                 file_types=file_types,
                 date_start=date_start,
-                date_end=date_end
+                date_end=date_end,
+                diagnostics=diagnostics
             )
         elif document_ids is None:
             # If no filter is applied at all, scan all documents (only if no notes are selected)
             if not note_ids:
                 raw_references = await self.retrieval_service.retrieve_context(
                     workspace_id=workspace_id,
-                    query=question,
-                    limit=10,
+                    query=query_arg,
+                    limit=search_limit,
                     document_ids=None,
                     file_types=file_types,
                     date_start=date_start,
-                    date_end=date_end
+                    date_end=date_end,
+                    diagnostics=diagnostics
                 )
 
         # Append note contexts if selected
         if note_ids:
-            note_refs = await self._retrieve_notes_context(workspace_id, note_ids, question)
+            note_refs = await self._retrieve_notes_context(workspace_id, note_ids, query_arg)
             raw_references.extend(note_refs)
+            diagnostics["retrieval_count_after_rerank"] += len(note_refs)
 
         retrieval_latency_ms = (time.perf_counter() - retrieval_start) * 1000.0
+        diagnostics["latency_per_stage"]["total_retrieval_ms"] = round(retrieval_latency_ms, 2)
         
         if not raw_references:
             no_context_msg = (
@@ -531,12 +766,47 @@ class RAGGenerationService:
             return
 
         # 4. Assemble context using ContextBuilder
-        context_builder = ContextBuilder(token_limit=4000)
+        t0 = time.perf_counter()
+        context_builder = ContextBuilder()
         context_str, references = context_builder.build_context(raw_references)
         references = self._make_references_serializable(references)
+        diagnostics["latency_per_stage"]["context_build_ms"] = round((time.perf_counter() - t0) * 1000.0, 2)
+        diagnostics["context_token_count"] = sum(r.get("token_count", 0) for r in references)
         
         # 5. Calculate confidence score
         confidence = self._calculate_confidence(references)
+
+        # 5.5. Verify context sufficiency conditionally to save LLM calls
+        is_sufficient = True
+        if confidence != "HIGH":
+            avg_similarity = sum(r.get("similarity_score", 0.0) for r in references) / len(references) if references else 0.0
+            if avg_similarity < 0.65 or len(references) < 5:
+                safe_question = question.replace("<", "&lt;").replace(">", "&gt;")
+                t0 = time.perf_counter()
+                is_sufficient = await self._verify_context_sufficiency(safe_question, context_str)
+                diagnostics["latency_per_stage"]["qa_verifier_ms"] = round((time.perf_counter() - t0) * 1000.0, 2)
+                diagnostics["number_of_llm_calls"] += 1
+
+        if not is_sufficient:
+            fallback_msg = "I could not find sufficient information in the uploaded documents."
+            yield f"data: {json.dumps({'type': 'content', 'delta': fallback_msg})}\n\n"
+            
+            citation_meta = {"confidence_score": "LOW", "citations": []}
+            yield f"data: {json.dumps({'type': 'metadata', 'confidence_score': 'LOW', 'model_used': 'None', 'references': references, 'citations': []})}\n\n"
+            yield "data: [DONE]\n\n"
+            
+            if conversation_id:
+                assistant_msg = Message(
+                    conversation_id=conversation_id,
+                    sender_role="assistant",
+                    content=fallback_msg,
+                    model_used="None",
+                    retrieved_chunks=references,
+                    citation_metadata=citation_meta
+                )
+                self.db.add(assistant_msg)
+                await self.db.commit()
+            return
 
         system_instruction = (
             "You are NoteAI, a production-grade citation-aware AI knowledge assistant.\n"
@@ -737,11 +1007,18 @@ class RAGGenerationService:
             self.db.add(assistant_msg)
             await self.db.commit()
 
-        # 9. Estimate and log token metrics
+        # Calculate and yield final token metrics
         prompt_tokens = TokenService.estimate_tokens(system_instruction + user_prompt)
-        completion_tokens = TokenService.estimate_tokens(final_answer)
+        completion_tokens = TokenService.estimate_tokens(generated_text)
         total_tokens = prompt_tokens + completion_tokens
+
         total_response_ms = (time.perf_counter() - start_time) * 1000.0
+        
+        diagnostics["latency_per_stage"]["generation_ms"] = round(llm_latency_ms, 2)
+        diagnostics["latency_per_stage"]["total_ms"] = round(total_response_ms, 2)
+        diagnostics["number_of_llm_calls"] += 1
+        if settings.DEBUG_RAG:
+            logger.info(json.dumps(diagnostics))
 
         asyncio.create_task(
             log_request_metrics_task(
