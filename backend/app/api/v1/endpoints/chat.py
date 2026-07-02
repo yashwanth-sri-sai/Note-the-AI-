@@ -41,6 +41,11 @@ async def list_conversation_messages(
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieve full message history log for a single conversation session."""
+    print("=" * 60)
+    print("CHAT ROUTE HIT")
+    print("conversation_id =", conversation_id)
+    print("type =", type(conversation_id))
+    print("=" * 60)
     chat_service = ChatService(db)
     conversation = await chat_service.get_conversation(conversation_id, workspace_id)
     return conversation.messages
@@ -59,7 +64,12 @@ async def send_message_rag(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Submit user message, execute pgvector context retrieval, log history, and generate LLM cited response (streams if requested)."""
+    """Process new user message and stream back RAG-enhanced AI response."""
+    print("=" * 60)
+    print("CHAT ROUTE HIT")
+    print("conversation_id =", conversation_id)
+    print("type =", type(conversation_id))
+    print("=" * 60)
     chat_service = ChatService(db)
     rag_service = RAGGenerationService(db)
     

@@ -179,6 +179,10 @@ export const NotebookLMChat: React.FC = () => {
   const fetchMessages = async (convId: string) => {
     setIsMessagesLoading(true);
     try {
+      console.log("convId =", convId);
+      console.log("typeof =", typeof convId);
+      console.log("length =", convId?.length);
+      console.log("URL =", `/chat/conversations/${convId}/messages`);
       const response = await apiClient.get(`/chat/conversations/${convId}/messages`);
       setMessages(response.data);
     } catch (error) {
@@ -297,10 +301,13 @@ export const NotebookLMChat: React.FC = () => {
     // Start Fetching stream
     const token = getAccessToken();
     const activeWorkspace = activeWorkspaceId;
-    const API_URL = import.meta.env.VITE_API_BASE_URL;
-    const apiURL = `${API_URL}/api/v1`;
+    const apiURL = apiClient.defaults.baseURL;
 
     try {
+      console.log("convId =", convId);
+      console.log("typeof =", typeof convId);
+      console.log("length =", convId?.length);
+      console.log("URL =", `/chat/conversations/${convId}/messages`);
       const response = await fetch(`${apiURL}/chat/conversations/${convId}/messages`, {
         method: "POST",
         headers: {

@@ -21,7 +21,8 @@ class ChatService:
             created_by=user_id
         )
         self.db.add(conversation)
-        await self.db.flush()
+        await self.db.commit()
+        await self.db.refresh(conversation)
         return conversation
 
     async def list_conversations(self, workspace_id: uuid.UUID) -> List[Conversation]:
@@ -36,6 +37,7 @@ class ChatService:
 
     async def get_conversation(self, conversation_id: uuid.UUID, workspace_id: uuid.UUID) -> Conversation:
         """Fetch details for a single conversation session, verifying workspace scoping."""
+        print("Looking up conversation:", conversation_id)
         stmt = (
             select(Conversation)
             .where(Conversation.id == conversation_id)
@@ -45,7 +47,10 @@ class ChatService:
         conversation = result.scalar_one_or_none()
         
         if not conversation:
+            print("Conversation does not exist")
             raise NotFoundException(detail="Conversation session not found")
+        
+        print("Conversation found:", conversation)
         if conversation.workspace_id != workspace_id:
             raise ForbiddenException(detail="Access denied to conversation session")
             

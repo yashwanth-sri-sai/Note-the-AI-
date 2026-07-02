@@ -223,8 +223,7 @@ export const NotesPage: React.FC = () => {
 
     const token = getAccessToken();
     const activeWorkspace = useWorkspaceStore.getState().activeWorkspaceId;
-    const API_URL = import.meta.env.VITE_API_BASE_URL;
-    const apiURL = `${API_URL}/api/v1`;
+    const apiURL = apiClient.defaults.baseURL;
 
     try {
       const response = await fetch(`${apiURL}/chat/conversations/${convId}/messages`, {
