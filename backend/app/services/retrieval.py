@@ -59,16 +59,19 @@ class RetrievalService:
         if date_end:
             stmt = stmt.where(Document.created_at <= date_end)
             
-        stmt = stmt.order_by("distance").limit(20)  # Retrieve 20 candidates for reranking
+        # Apply similarity threshold (distance < 0.65 == similarity > 0.35)
+        stmt = stmt.where(distance_col < 0.65)
+            
+        stmt = stmt.order_by("distance").limit(50)  # Retrieve 50 candidates for reranking
         
         result = await self.db.execute(stmt)
         rows = result.all()
         
         # 3. Format candidates, mapping distance to similarity score
-        candidates = []
+        raw_candidates = []
         for row in rows:
             similarity = 1.0 - float(row.distance)
-            candidates.append({
+            raw_candidates.append({
                 "chunk_uuid": row.chunk_uuid,
                 "chunk_text": row.chunk_text,
                 "similarity_score": similarity,
@@ -80,6 +83,19 @@ class RetrievalService:
                 "source_reference": row.source_reference
             })
             
-        # 4. Apply reranker to filter and sort down to the top limit (default 5)
-        reranked_results = await self.reranker_provider.rerank(query, candidates, top_n=limit)
+        # 4. Deduplicate candidates using MD5 hash before sending to reranker (saves API costs)
+        import hashlib
+        seen_hashes = set()
+        deduped_candidates = []
+        for chunk in raw_candidates:
+            text_val = chunk.get("chunk_text", "").strip()
+            if not text_val:
+                continue
+            text_hash = hashlib.md5(text_val.encode('utf-8')).hexdigest()
+            if text_hash not in seen_hashes:
+                seen_hashes.add(text_hash)
+                deduped_candidates.append(chunk)
+            
+        # 5. Apply reranker to filter and sort down to the top limit (default 10)
+        reranked_results = await self.reranker_provider.rerank(query, deduped_candidates, top_n=limit)
         return reranked_results

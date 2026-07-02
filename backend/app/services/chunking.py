@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 
 
 class ChunkingService:
-    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200):
+    def __init__(self, chunk_size: int = 2000, chunk_overlap: int = 400):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
         self.separators = ["\n\n", "\n", " ", ""]
@@ -137,4 +137,4 @@ class ChunkingService:
 
 # Factory method for default config
 def get_chunking_service() -> ChunkingService:
-    return ChunkingService(chunk_size=1000, chunk_overlap=200)
+    return ChunkingService(chunk_size=2000, chunk_overlap=400)

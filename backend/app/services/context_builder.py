@@ -1,3 +1,4 @@
+import hashlib
 from typing import List, Dict, Any, Tuple
 from app.services.token_estimator import TokenService
 
@@ -7,28 +8,19 @@ class ContextBuilder:
         self.token_limit = token_limit
 
     def build_context(self, chunks: List[Dict[str, Any]]) -> Tuple[str, List[Dict[str, Any]]]:
-        """Deduplicate, sort by relevance, cap within the token budget, and format the context strings.
+        """Sort by relevance, cap within the token budget, and format the context strings.
         
         Returns:
             Tuple[context_str, accepted_chunks]
         """
-        # 1. Deduplicate chunks using chunk_uuid
-        seen_uuids = set()
-        deduped_chunks = []
-        for chunk in chunks:
-            uuid_val = chunk.get("chunk_uuid")
-            if uuid_val not in seen_uuids:
-                seen_uuids.add(uuid_val)
-                deduped_chunks.append(chunk)
-
-        # 2. Sort by similarity score descending (just in case they are not pre-sorted)
+        # 1. Sort by similarity score descending (just in case they are not pre-sorted)
         sorted_chunks = sorted(
-            deduped_chunks,
+            chunks,
             key=lambda x: x.get("similarity_score", 0.0),
             reverse=True
         )
 
-        # 3. Assemble up to the token limit
+        # 2. Assemble up to the token limit
         current_token_count = 0
         accepted_chunks = []
         context_parts = []

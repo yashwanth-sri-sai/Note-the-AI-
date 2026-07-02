@@ -1,6 +1,6 @@
 import io
 import re
-from typing import Generator, Dict, Any, Protocol
+from typing import Dict, Any, Protocol, List
 
 # Conditional imports for PyMuPDF and python-docx
 try:
@@ -15,16 +15,20 @@ except ImportError:
 
 
 class DocumentExtractor(Protocol):
-    def extract_segments(self, file_bytes: bytes) -> Generator[Dict[str, Any], None, None]:
-        """Extract segments of text page-by-page to avoid memory bloat, yielding metadata."""
+    def extract_unified(self, file_bytes: bytes) -> Dict[str, Any]:
+        """Extracts the entire document as a single string and builds a metadata map."""
         ...
 
 
 class PDFExtractor:
-    def extract_segments(self, file_bytes: bytes) -> Generator[Dict[str, Any], None, None]:
+    def extract_unified(self, file_bytes: bytes) -> Dict[str, Any]:
         if not fitz:
             raise ImportError("PyMuPDF (fitz) is not installed.")
             
+        full_text = []
+        page_map = []
+        current_offset = 0
+        
         # Open PDF from memory stream
         with fitz.open(stream=file_bytes, filetype="pdf") as doc:
             for page_idx, page in enumerate(doc):
@@ -43,26 +47,42 @@ class PDFExtractor:
                         section_title = line_clean
                         break
                 
-                yield {
-                    "text": text,
+                # Normalize newlines and append to unified text
+                text_len = len(text)
+                full_text.append(text)
+                
+                page_map.append({
+                    "start_offset": current_offset,
+                    "end_offset": current_offset + text_len,
                     "page_number": page_idx + 1,
                     "section_title": section_title
-                }
+                })
+                
+                current_offset += text_len
+                
+        return {
+            "text": "".join(full_text),
+            "page_map": page_map
+        }
 
 
 class DOCXExtractor:
-    def extract_segments(self, file_bytes: bytes) -> Generator[Dict[str, Any], None, None]:
+    def extract_unified(self, file_bytes: bytes) -> Dict[str, Any]:
         if not docx:
             raise ImportError("python-docx (docx) is not installed.")
             
         stream = io.BytesIO(file_bytes)
         doc = docx.Document(stream)
         
+        full_text = []
+        page_map = []
+        current_offset = 0
+        
         current_section = None
         paragraphs = []
         page_num = 1
         
-        # Group paragraphs into chunks representing "pages" (approx. 15 paragraphs per page)
+        # Group paragraphs into arbitrary logical boundaries to build the page map
         for p in doc.paragraphs:
             if not p.text.strip():
                 continue
@@ -71,93 +91,106 @@ class DOCXExtractor:
                 
             paragraphs.append(p.text)
             if len(paragraphs) >= 15:
-                yield {
-                    "text": "\n\n".join(paragraphs),
+                segment_text = "\n\n".join(paragraphs) + "\n\n"
+                text_len = len(segment_text)
+                full_text.append(segment_text)
+                
+                page_map.append({
+                    "start_offset": current_offset,
+                    "end_offset": current_offset + text_len,
                     "page_number": page_num,
                     "section_title": current_section
-                }
+                })
+                current_offset += text_len
                 paragraphs = []
                 page_num += 1
                 
         if paragraphs:
-            yield {
-                "text": "\n\n".join(paragraphs),
+            segment_text = "\n\n".join(paragraphs) + "\n\n"
+            text_len = len(segment_text)
+            full_text.append(segment_text)
+            
+            page_map.append({
+                "start_offset": current_offset,
+                "end_offset": current_offset + text_len,
                 "page_number": page_num,
                 "section_title": current_section
-            }
+            })
+            
+        return {
+            "text": "".join(full_text),
+            "page_map": page_map
+        }
 
 
 class TXTExtractor:
-    def extract_segments(self, file_bytes: bytes) -> Generator[Dict[str, Any], None, None]:
+    def extract_unified(self, file_bytes: bytes) -> Dict[str, Any]:
         try:
             raw_text = file_bytes.decode("utf-8")
         except UnicodeDecodeError:
             raw_text = file_bytes.decode("latin-1")
             
-        # Group raw text into chunks of approx. 3000 chars as estimated "pages"
-        chunk_size = 3000
-        current_page = 1
-        for i in range(0, len(raw_text), chunk_size):
-            segment = raw_text[i : i + chunk_size]
-            if segment.strip():
-                yield {
-                    "text": segment,
-                    "page_number": current_page,
-                    "section_title": None
-                }
-                current_page += 1
+        return {
+            "text": raw_text,
+            "page_map": [{
+                "start_offset": 0,
+                "end_offset": len(raw_text),
+                "page_number": 1,
+                "section_title": None
+            }]
+        }
 
 
 class MarkdownExtractor:
-    def extract_segments(self, file_bytes: bytes) -> Generator[Dict[str, Any], None, None]:
+    def extract_unified(self, file_bytes: bytes) -> Dict[str, Any]:
         try:
             raw_text = file_bytes.decode("utf-8")
         except UnicodeDecodeError:
             raw_text = file_bytes.decode("latin-1")
             
-        # Clean markdown formatting characters
-        cleaned_text = re.sub(r'^#+\s+', '', raw_text, flags=re.MULTILINE)
-        cleaned_text = re.sub(r'\[([^\]]+)\]\([^\)]+\)', r'\1', cleaned_text)
-        cleaned_text = re.sub(r'[\*_]{1,3}', '', cleaned_text)
-        cleaned_text = re.sub(r'```[a-zA-Z]*\n(.*?)\n```', r'\1', cleaned_text, flags=re.DOTALL)
-        cleaned_text = re.sub(r'`([^`]+)`', r'\1', cleaned_text)
-        cleaned_text = re.sub(r'^[ \t]*[\*\-\+]\s+', '', cleaned_text, flags=re.MULTILINE)
-        cleaned_text = re.sub(r'^[ \t]*\d+\.\s+', '', cleaned_text, flags=re.MULTILINE)
-
-        # Estimate sections by checking raw markdown lines
         lines = raw_text.splitlines()
-        sections_map = []
-        char_idx = 0
         current_section = None
+        current_content = []
+        
+        full_text = []
+        page_map = []
+        current_offset = 0
+        
         for line in lines:
-            match = re.match(r'^#+\s+(.*)$', line)
+            match = re.match(r'^(#+)\s+(.*)$', line)
             if match:
-                current_section = match.group(1).strip()
-            sections_map.append((char_idx, current_section))
-            char_idx += len(line) + 1
-
-        # Yield pages based on 3000-character segments
-        chunk_size = 3000
-        current_page = 1
-        for i in range(0, len(cleaned_text), chunk_size):
-            segment = cleaned_text[i : i + chunk_size]
-            if not segment.strip():
-                continue
-                
-            # Match section title at current character index
-            sect = None
-            for idx, section_title in sections_map:
-                if idx <= i:
-                    sect = section_title
-                else:
-                    break
+                if current_content and any(c.strip() for c in current_content):
+                    segment_text = "\n".join(current_content) + "\n"
+                    text_len = len(segment_text)
+                    full_text.append(segment_text)
+                    page_map.append({
+                        "start_offset": current_offset,
+                        "end_offset": current_offset + text_len,
+                        "page_number": 1,
+                        "section_title": current_section
+                    })
+                    current_offset += text_len
                     
-            yield {
-                "text": segment,
-                "page_number": current_page,
-                "section_title": sect
-            }
-            current_page += 1
+                current_section = match.group(2).strip()
+                current_content = [line]
+            else:
+                current_content.append(line)
+                
+        if current_content and any(c.strip() for c in current_content):
+            segment_text = "\n".join(current_content) + "\n"
+            text_len = len(segment_text)
+            full_text.append(segment_text)
+            page_map.append({
+                "start_offset": current_offset,
+                "end_offset": current_offset + text_len,
+                "page_number": 1,
+                "section_title": current_section
+            })
+            
+        return {
+            "text": "".join(full_text),
+            "page_map": page_map
+        }
 
 
 def get_extractor(filename: str, content_type: str = "") -> DocumentExtractor:

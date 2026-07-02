@@ -58,37 +58,52 @@ async def run_document_ingestion_pipeline(
             doc.status = "processing"
             await db.commit()
 
-            # 2. Extract page segments and split them with offsets
+            # 2. Extract unified text and split it
             extractor = get_extractor(filename, content_type)
             chunking_service = get_chunking_service()
             
             flat_chunks = []
             chunk_idx = 0
-            for segment in extractor.extract_segments(file_bytes):
-                page_text = segment["text"]
-                page_num = segment["page_number"]
-                section_title = segment["section_title"]
-                
-                # Split this segment's text with offsets
-                sub_chunks = chunking_service.split_text_with_offsets(page_text)
-                for sc in sub_chunks:
-                    tokens = TokenService.estimate_tokens(sc["text"])
-                    source_ref = f"{filename}#page={page_num}" if page_num else filename
-                    
-                    flat_chunks.append({
-                        "text": sc["text"],
-                        "chunk_index": chunk_idx,
-                        "page_number": page_num,
-                        "section_title": section_title,
-                        "start_offset": sc["start_offset"],
-                        "end_offset": sc["end_offset"],
-                        "token_count": tokens,
-                        "source_reference": source_ref
-                    })
-                    chunk_idx += 1
-
-            if not flat_chunks:
+            
+            extracted_data = extractor.extract_unified(file_bytes)
+            unified_text = extracted_data["text"]
+            page_map = extracted_data["page_map"]
+            
+            if not unified_text.strip():
                 raise ValueError("No readable text content extracted from document.")
+                
+            sub_chunks = chunking_service.split_text_with_offsets(unified_text)
+            
+            for sc in sub_chunks:
+                # Map chunk to page and section based on start_offset
+                mapped_page = 1
+                mapped_section = None
+                
+                for p in page_map:
+                    if p["start_offset"] <= sc["start_offset"] < p["end_offset"]:
+                        mapped_page = p["page_number"]
+                        mapped_section = p["section_title"]
+                        break
+                
+                # Fallback if somehow beyond bounds
+                if not mapped_section and page_map and sc["start_offset"] >= page_map[-1]["end_offset"]:
+                    mapped_page = page_map[-1]["page_number"]
+                    mapped_section = page_map[-1]["section_title"]
+                
+                tokens = TokenService.estimate_tokens(sc["text"])
+                source_ref = f"{filename}#page={mapped_page}" if mapped_page else filename
+                
+                flat_chunks.append({
+                    "text": sc["text"],
+                    "chunk_index": chunk_idx,
+                    "page_number": mapped_page,
+                    "section_title": mapped_section,
+                    "start_offset": sc["start_offset"],
+                    "end_offset": sc["end_offset"],
+                    "token_count": tokens,
+                    "source_reference": source_ref
+                })
+                chunk_idx += 1
 
             # 3. Generate batch embeddings (track embedding latency)
             embedding_provider = get_embedding_provider()

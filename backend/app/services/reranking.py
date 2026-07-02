@@ -1,3 +1,5 @@
+import os
+import httpx
 from typing import List, Dict, Any, Protocol
 
 
@@ -10,12 +12,67 @@ class RerankerProvider(Protocol):
 class ScoreBasedReranker:
     """Fallback reranker that sorts candidates by vector similarity score."""
     async def rerank(self, query: str, candidates: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
-        # Sort by similarity score descending (or distance ascending)
         sorted_candidates = sorted(candidates, key=lambda x: x.get("similarity_score", 0.0), reverse=True)
         return sorted_candidates[:top_n]
 
 
+class CohereReranker:
+    """True cross-encoder reranker using Cohere API."""
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.url = "https://api.cohere.com/v1/rerank"
+        self.model = "rerank-english-v3.0"
+
+    async def rerank(self, query: str, candidates: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
+        if not candidates:
+            return []
+
+        # Maintain original vector rank for diagnostics
+        sorted_by_vector = sorted(candidates, key=lambda x: x.get("similarity_score", 0.0), reverse=True)
+        
+        # Prepare docs for Cohere
+        docs = [c.get("chunk_text", "") for c in sorted_by_vector]
+        
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        payload = {
+            "model": self.model,
+            "query": query,
+            "documents": docs,
+            "top_n": top_n
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(self.url, headers=headers, json=payload)
+                response.raise_for_status()
+                data = response.json()
+        except Exception as e:
+            print(f"Cohere reranker failed: {e}. Falling back to vector scores.")
+            return sorted_by_vector[:top_n]
+
+        # Process results
+        reranked_results = []
+        
+        for new_rank, result in enumerate(data.get("results", [])):
+            original_idx = result["index"]
+            reranker_score = result["relevance_score"]
+            
+            chunk = sorted_by_vector[original_idx]
+            
+            # Update the similarity score with the reranker's relevance score
+            chunk["similarity_score"] = reranker_score
+            reranked_results.append(chunk)
+        return reranked_results
+
+
 def get_reranker_provider() -> RerankerProvider:
     """Factory resolver returning active reranker provider."""
-    # Cohere / Cross-Encoder integration can be configured here in the future
+    cohere_key = os.getenv("COHERE_API_KEY")
+    if cohere_key:
+        return CohereReranker(cohere_key)
     return ScoreBasedReranker()

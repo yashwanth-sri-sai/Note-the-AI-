@@ -54,7 +54,7 @@ class RAGGenerationService:
         return serializable
 
     async def _retrieve_notes_context(
-        self, workspace_id: uuid.UUID, note_ids: List[uuid.UUID]
+        self, workspace_id: uuid.UUID, note_ids: List[uuid.UUID], query: str
     ) -> List[Dict[str, Any]]:
         """Fetch notes from the database and format them as pseudo-chunks for the context builder."""
         if not note_ids:
@@ -65,17 +65,34 @@ class RAGGenerationService:
         res = await self.db.execute(stmt)
         notes = res.scalars().all()
         
+        # Calculate dynamic similarity
+        query_vector = await self.retrieval_service.embedding_provider.get_embedding(query)
+        
         note_chunks = []
         for note in notes:
+            note_content = note.content or ""
+            
+            # Embed note dynamically (cap at 4000 chars to avoid token limits on unchunked text)
+            try:
+                note_vector = await self.retrieval_service.embedding_provider.get_embedding(note_content[:4000])
+                
+                # Calculate cosine similarity locally
+                dot_product = sum(a * b for a, b in zip(query_vector, note_vector))
+                norm_a = sum(a * a for a in query_vector) ** 0.5
+                norm_b = sum(b * b for b in note_vector) ** 0.5
+                similarity = dot_product / (norm_a * norm_b) if norm_a and norm_b else 0.0
+            except Exception:
+                similarity = 0.50 # fallback score
+                
             note_chunks.append({
                 "chunk_uuid": note.id,
-                "chunk_text": note.content or "",
-                "similarity_score": 0.95, # high score so they are prioritized in context building
+                "chunk_text": note_content,
+                "similarity_score": similarity, 
                 "document_name": note.title or "Untitled Note",
                 "document_id": note.id,
                 "page_number": None,
                 "section_title": "Note Content",
-                "token_count": len(note.content.split()) // 3 + 1 if note.content else 1,
+                "token_count": len(note_content.split()) // 3 + 1 if note_content else 1,
                 "source_reference": f"Note: {note.title}"
             })
         return note_chunks
@@ -130,7 +147,7 @@ class RAGGenerationService:
                 raw_references = await self.retrieval_service.retrieve_context(
                     workspace_id=workspace_id,
                     query=question,
-                    limit=20,
+                    limit=10,
                     document_ids=document_ids,
                     file_types=file_types,
                     date_start=date_start,
@@ -142,7 +159,7 @@ class RAGGenerationService:
                     raw_references = await self.retrieval_service.retrieve_context(
                         workspace_id=workspace_id,
                         query=question,
-                        limit=20,
+                        limit=10,
                         document_ids=None,
                         file_types=file_types,
                         date_start=date_start,
@@ -151,7 +168,7 @@ class RAGGenerationService:
 
             # Append note contexts if selected
             if note_ids:
-                note_refs = await self._retrieve_notes_context(workspace_id, note_ids)
+                note_refs = await self._retrieve_notes_context(workspace_id, note_ids, question)
                 raw_references.extend(note_refs)
 
             retrieval_latency_ms = (time.perf_counter() - retrieval_start) * 1000.0
@@ -271,35 +288,24 @@ class RAGGenerationService:
 
             llm_start = time.perf_counter()
             if self.gemini_key:
-                print("USING GEMINI")
-                print("PROVIDER CALL START")
                 model_used = self.gemini_model
                 try:
                     generated_text = await retry_with_backoff(_call_gemini)
-                    print("PROVIDER CALL SUCCESS")
                 except Exception as gemini_err:
-                    print("PROVIDER CALL FAILED")
                     import traceback
                     traceback.print_exc()
-                    print(f"Gemini call failed: {gemini_err}. Falling back to mock response.")
                     model_used = "MockLLM"
                     generated_text = f"Gemini provider call failed ({str(gemini_err)}). This is a fallback response about '{question}'."
             elif self.openai_key:
-                print("USING OPENAI")
-                print("PROVIDER CALL START")
                 model_used = self.openai_model
                 try:
                     generated_text = await retry_with_backoff(_call_openai)
-                    print("PROVIDER CALL SUCCESS")
                 except Exception as openai_err:
-                    print("PROVIDER CALL FAILED")
                     import traceback
                     traceback.print_exc()
-                    print(f"OpenAI call failed: {openai_err}. Falling back to mock response.")
                     model_used = "MockLLM"
                     generated_text = f"OpenAI provider call failed ({str(openai_err)}). This is a fallback response about '{question}'."
             elif is_mock:
-                print("MOCK MODE ACTIVE")
                 model_used = "MockLLM"
                 generated_text = f"This is a mock cited response about '{question}' for development testing. The retrieved documents contain information regarding NoteAI."
             llm_latency_ms = (time.perf_counter() - llm_start) * 1000.0
@@ -437,7 +443,7 @@ class RAGGenerationService:
             raw_references = await self.retrieval_service.retrieve_context(
                 workspace_id=workspace_id,
                 query=question,
-                limit=20,
+                limit=10,
                 document_ids=document_ids,
                 file_types=file_types,
                 date_start=date_start,
@@ -449,7 +455,7 @@ class RAGGenerationService:
                 raw_references = await self.retrieval_service.retrieve_context(
                     workspace_id=workspace_id,
                     query=question,
-                    limit=20,
+                    limit=10,
                     document_ids=None,
                     file_types=file_types,
                     date_start=date_start,
@@ -458,7 +464,7 @@ class RAGGenerationService:
 
         # Append note contexts if selected
         if note_ids:
-            note_refs = await self._retrieve_notes_context(workspace_id, note_ids)
+            note_refs = await self._retrieve_notes_context(workspace_id, note_ids, question)
             raw_references.extend(note_refs)
 
         retrieval_latency_ms = (time.perf_counter() - retrieval_start) * 1000.0
@@ -540,8 +546,6 @@ class RAGGenerationService:
         llm_start = time.perf_counter()
         try:
             if self.gemini_key:
-                print("USING GEMINI")
-                print("PROVIDER CALL START")
                 model_used = self.gemini_model
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:streamGenerateContent"
@@ -581,12 +585,9 @@ class RAGGenerationService:
                                 except (KeyError, IndexError):
                                     pass
                         await response.aclose()
-                        print("PROVIDER CALL SUCCESS")
                     except Exception as gemini_err:
-                        print("PROVIDER CALL FAILED")
                         import traceback
                         traceback.print_exc()
-                        print(f"Gemini streaming failed: {gemini_err}. Streaming fallback response.")
                         model_used = "MockLLM"
                         fallback_text = f"Gemini provider call failed ({str(gemini_err)}). This is a fallback response about '{question}'."
                         for token in fallback_text.split(" "):
@@ -595,8 +596,6 @@ class RAGGenerationService:
                             await asyncio.sleep(0.02)
                                         
             elif self.openai_key:
-                print("USING OPENAI")
-                print("PROVIDER CALL START")
                 model_used = self.openai_model
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     headers = {
@@ -638,12 +637,9 @@ class RAGGenerationService:
                                 except Exception:
                                     pass
                         await response.aclose()
-                        print("PROVIDER CALL SUCCESS")
                     except Exception as openai_err:
-                        print("PROVIDER CALL FAILED")
                         import traceback
                         traceback.print_exc()
-                        print(f"OpenAI streaming failed: {openai_err}. Streaming fallback response.")
                         model_used = "MockLLM"
                         fallback_text = f"OpenAI provider call failed ({str(openai_err)}). This is a fallback response about '{question}'."
                         for token in fallback_text.split(" "):
@@ -652,7 +648,6 @@ class RAGGenerationService:
                             await asyncio.sleep(0.02)
 
             elif is_mock:
-                print("MOCK MODE ACTIVE")
                 model_used = "MockLLM"
                 mock_text = f"This is a mock cited response about '{question}' for development testing. The retrieved documents contain information regarding NoteAI."
                 for token in mock_text.split(" "):
