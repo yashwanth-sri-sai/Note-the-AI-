@@ -1,4 +1,5 @@
 import uuid
+import re
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 from sqlalchemy import select
@@ -6,6 +7,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.document import Document, DocumentChunk, Embedding
 from app.services.embedding import get_embedding_provider
 from app.services.reranking import get_reranker_provider
+
+
+def calculate_factual_boost(text: str) -> float:
+    """Calculates keyword and temporal pattern boost for factual queries.
+    
+    Boosts:
+    - 0.25 per 4-digit year (1800-2099) or decade pattern (1940s, 1960s)
+    - 0.15 per historical indicator keyword (origin, started, founded, emerged)
+    """
+    boost = 0.0
+    text_lower = text.lower()
+    
+    # Match years/decades like 1940s, 1960's, 2020, 1850
+    year_pattern = r'\b(18|19|20)\d{2}(s|\'s)?\b'
+    year_matches = re.findall(year_pattern, text, re.IGNORECASE)
+    if year_matches:
+        boost += 0.25 * len(year_matches)
+        
+    boost_words = ["origin", "started", "founded", "emerged"]
+    for word in boost_words:
+        if word in text_lower:
+            boost += 0.15 * text_lower.count(word)
+            
+    return boost
 
 
 class RetrievalService:
@@ -25,24 +50,32 @@ class RetrievalService:
         date_end: Optional[datetime] = None,
         diagnostics: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
-        """Perform workspace-scoped semantic similarity search, applying filters and the reranking layer."""
+        """Perform workspace-scoped semantic similarity search, applying filters, factual boosting, and reranking."""
         
         queries = [query] if isinstance(query, str) else query
         if not queries:
             return []
             
         original_query = queries[0]
+        
+        # 1. Detect question type
+        query_lower = original_query.lower()
+        factual_keywords = ["when", "who", "where", "year", "origin"]
+        conceptual_keywords = ["what", "explain", "describe"]
+        
+        is_factual = any(kw in query_lower for kw in factual_keywords)
+        is_conceptual = any(kw in query_lower for kw in conceptual_keywords)
+        
         all_raw_candidates = []
         
-        # 1. Generate query embeddings in parallel (Network I/O)
+        # 2. Generate query embeddings in parallel (Network I/O)
         import asyncio
         query_vectors = await asyncio.gather(
             *(self.embedding_provider.get_embedding(q) for q in queries)
         )
         
-        # 2. Execute DB queries sequentially to ensure database safety (no shared session corruption)
+        # 3. Execute DB queries sequentially to ensure database safety
         for query_vector in query_vectors:
-            # Build cosine distance query fetching up to 50 candidates per query
             distance_col = Embedding.embedding.cosine_distance(query_vector)
             
             stmt = (
@@ -63,7 +96,6 @@ class RetrievalService:
                 .where(Document.status == "completed")
             )
             
-            # Apply filters
             if document_ids:
                 stmt = stmt.where(Document.id.in_(document_ids))
             if file_types:
@@ -73,21 +105,25 @@ class RetrievalService:
             if date_end:
                 stmt = stmt.where(Document.created_at <= date_end)
                 
-            # Apply similarity threshold
             stmt = stmt.where(distance_col < 0.65)
-                
             stmt = stmt.order_by("distance").limit(50)
             
             result = await self.db.execute(stmt)
             rows = result.all()
             
-            # 3. Format candidates, mapping distance to similarity score
+            # Format candidates, applying factual boosting if applicable
             for row in rows:
                 similarity = 1.0 - float(row.distance)
+                chunk_text = row.chunk_text or ""
+                
+                factual_boost = 0.0
+                if is_factual:
+                    factual_boost = calculate_factual_boost(chunk_text)
+                    
                 all_raw_candidates.append({
                     "chunk_uuid": row.chunk_uuid,
-                    "chunk_text": row.chunk_text,
-                    "similarity_score": similarity,
+                    "chunk_text": chunk_text,
+                    "similarity_score": similarity + factual_boost,
                     "document_name": row.document_name,
                     "document_id": row.document_id,
                     "page_number": row.page_number,
@@ -96,10 +132,10 @@ class RetrievalService:
                     "source_reference": row.source_reference
                 })
         
-        # Sort all raw candidates by similarity score before deduplication so we keep the highest scores
+        # Sort candidates by combined score
         all_raw_candidates.sort(key=lambda x: x["similarity_score"], reverse=True)
 
-        # 4. Deduplicate candidates using overlap check before sending to reranker (saves API costs)
+        # 4. Deduplicate candidates using overlap check
         deduped_candidates = []
         for chunk in all_raw_candidates:
             text_val = chunk.get("chunk_text", "").strip()
@@ -120,7 +156,6 @@ class RetrievalService:
                 overlap = len(set1.intersection(set2))
                 min_len = min(len(set1), len(set2))
                 
-                # If > 75% of the smaller chunk's tokens are present in the other, it's a sliding window duplicate
                 if min_len > 0 and (overlap / min_len) > 0.75:
                     is_duplicate = True
                     break
@@ -128,18 +163,25 @@ class RetrievalService:
             if not is_duplicate:
                 deduped_candidates.append(chunk)
             
-        # 5. Apply reranker to filter and sort down to a larger candidate pool
-        # We fetch more candidates so the diversity selector has room to maneuver.
+        # 5. Apply reranker to sort down to candidates pool
         expanded_limit = max(limit * 3, 30)
         reranked_results = await self.reranker_provider.rerank(original_query, deduped_candidates, top_n=expanded_limit)
         
+        # Ensure final reranker prioritizes factual grounding over pure semantic similarity
+        if is_factual:
+            for chunk in reranked_results:
+                text_val = chunk.get("chunk_text", "")
+                boost = calculate_factual_boost(text_val)
+                chunk["similarity_score"] = chunk["similarity_score"] + boost
+            # Re-sort post-rerank based on combined score
+            reranked_results.sort(key=lambda x: x.get("similarity_score", 0.0), reverse=True)
+            
         # 6. Diversity Selector
         selected_chunks = []
         skipped_chunks = []
         page_counts = {}
         section_counts = {}
         
-        # Pass 1: Strict constraints
         for chunk in reranked_results:
             doc_id = str(chunk.get("document_id"))
             page_num = chunk.get("page_number")
@@ -168,7 +210,6 @@ class RetrievalService:
             if len(selected_chunks) >= limit:
                 break
                 
-        # Pass 2: Relaxed constraints (fill remaining slots if document is short)
         if len(selected_chunks) < limit and skipped_chunks:
             slots_to_fill = limit - len(selected_chunks)
             selected_chunks.extend(skipped_chunks[:slots_to_fill])
