@@ -13,10 +13,15 @@ class ContextBuilder:
         Returns:
             Tuple[context_str, accepted_chunks]
         """
+        # Phase 4 Null & Type Safety Guard
+        if chunks is None:
+            chunks = []
+        chunks = [c for c in chunks if isinstance(c, dict) and c is not None]
+
         # 1. Sort by similarity score descending (just in case they are not pre-sorted)
         sorted_chunks = sorted(
             chunks,
-            key=lambda x: x.get("similarity_score", 0.0),
+            key=lambda x: x.get("similarity_score", 0.0) or 0.0,
             reverse=True
         )
 

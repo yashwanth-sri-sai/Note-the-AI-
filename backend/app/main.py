@@ -1,5 +1,18 @@
 import logging
 import asyncio
+import sys
+import os
+
+# Phase 8: Run production startup checks before initializing the app router
+from app.startup_health_check import run_startup_checks
+try:
+    asyncio.run(run_startup_checks())
+except SystemExit as sys_exit:
+    raise sys_exit
+except Exception as e:
+    print(f"CRITICAL: Application startup health check failed: {e}")
+    sys.exit(1)
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -155,8 +168,8 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "detail": "An internal server error occurred.",
-            "code": "INTERNAL_SERVER_ERROR",
+            "error": "internal_error",
+            "message": "Service temporarily unavailable"
         },
     )
 
@@ -172,11 +185,67 @@ async def root():
         "service": settings.PROJECT_NAME
     }
 
-# Root Health Check endpoint
+from fastapi import Depends
+from app.db.session import get_db, AsyncSession, safe_db_execute
+from sqlalchemy import text
+from app.core.circuit_breaker import llm_breaker, embedding_breaker, reranker_breaker
+
+# Consolidated Health Check endpoint
 @app.get("/health", tags=["Health"])
-async def health_check():
+async def health_check(db: AsyncSession = Depends(get_db)):
+    db_ok = True
+    try:
+        res = await safe_db_execute(db, text("SELECT 1"))
+        db_ok = (res.scalar() == 1) if res else False
+    except Exception:
+        db_ok = False
+        
+    llm_ok = llm_breaker.state != "OPEN" and (bool(os.getenv("OPENAI_API_KEY")) or bool(settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")))
+    vector_ok = embedding_breaker.state != "OPEN" and reranker_breaker.state != "OPEN"
+    
+    overall = "healthy"
+    if not db_ok:
+        overall = "down"
+    elif not llm_ok or not vector_ok:
+        overall = "degraded"
+        
     return {
-        "status": "healthy",
+        "status": overall,
         "project": settings.PROJECT_NAME,
         "environment": settings.ENVIRONMENT,
+        "details": {
+            "database": "healthy" if db_ok else "down",
+            "llm": "healthy" if llm_ok else ("degraded" if llm_breaker.state == "OPEN" else "down"),
+            "vector": "healthy" if vector_ok else "degraded"
+        }
     }
+
+@app.get("/health/db", tags=["Health"])
+async def health_db(db: AsyncSession = Depends(get_db)):
+    try:
+        result = await safe_db_execute(db, text("SELECT 1"))
+        val = result.scalar() if result else None
+        if val == 1:
+            return {"status": "healthy"}
+        return {"status": "degraded", "message": "Test query returned invalid output."}
+    except Exception as e:
+        logger.error(f"Health DB query failed: {e}")
+        return {"status": "down", "message": str(e)}
+
+@app.get("/health/llm", tags=["Health"])
+async def health_llm():
+    if llm_breaker.state == "OPEN":
+        return {"status": "degraded", "message": "Circuit breaker is open due to recent failures."}
+    openai_key = os.getenv("OPENAI_API_KEY")
+    gemini_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if not openai_key and not gemini_key:
+        return {"status": "down", "message": "No active LLM provider keys configured."}
+    return {"status": "healthy"}
+
+@app.get("/health/vector", tags=["Health"])
+async def health_vector():
+    if embedding_breaker.state == "OPEN":
+        return {"status": "degraded", "message": "Embedding circuit breaker is open."}
+    if reranker_breaker.state == "OPEN":
+        return {"status": "degraded", "message": "Reranker circuit breaker is open."}
+    return {"status": "healthy"}

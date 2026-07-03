@@ -122,39 +122,39 @@ class RAGGenerationService:
         Runs a fast LLM pre-check using Gemini/OpenAI to ensure context contains 
         the answer to prevent hallucination. Returns True if sufficient, False if not.
         """
-        import httpx
-        import json
-        
-        prompt = (
-            "You are a RAG QA verifier.\n\n"
-            "Your job is to decide whether the retrieved context contains enough information to answer the user question.\n\n"
-            "RULES:\n"
-            "- You MUST NOT answer the question.\n"
-            "- You only evaluate retrieval quality.\n\n"
-            "INPUT:\n"
-            f"Question:\n{question}\n\n"
-            f"Retrieved Context Chunks:\n{context_str}\n\n"
-            "TASK:\n"
-            "1. Check if the answer exists explicitly OR can be directly inferred.\n"
-            "2. If YES, return:\n"
-            "   {\n"
-            "     \"decision\": \"SUFFICIENT\",\n"
-            "     \"missing_info\": []\n"
-            "   }\n"
-            "3. If NO, return:\n"
-            "   {\n"
-            "     \"decision\": \"INSUFFICIENT\",\n"
-            "     \"missing_info\": [\"what is missing\"]\n"
-            "   }\n"
-            "4. Be strict: partial semantic similarity is NOT sufficient.\n"
-            "5. Only mark SUFFICIENT if:\n"
-            "   - at least 1 chunk directly contains the answer\n"
-            "   OR\n"
-            "   - 2+ chunks together fully contain the answer\n\n"
-            "OUTPUT FORMAT (STRICT JSON ONLY)"
-        )
-        
         try:
+            import httpx
+            import json
+            
+            prompt = (
+                "You are a RAG QA verifier.\n\n"
+                "Your job is to decide whether the retrieved context contains enough information to answer the user question.\n\n"
+                "RULES:\n"
+                "- You MUST NOT answer the question.\n"
+                "- You only evaluate retrieval quality.\n\n"
+                "INPUT:\n"
+                f"Question:\n{question}\n\n"
+                f"Retrieved Context Chunks:\n{context_str}\n\n"
+                "TASK:\n"
+                "1. Check if the answer exists explicitly OR can be directly inferred.\n"
+                "2. If YES, return:\n"
+                "   {\n"
+                "     \"decision\": \"SUFFICIENT\",\n"
+                "     \"missing_info\": []\n"
+                "   }\n"
+                "3. If NO, return:\n"
+                "   {\n"
+                "     \"decision\": \"INSUFFICIENT\",\n"
+                "     \"missing_info\": [\"what is missing\"]\n"
+                "   }\n"
+                "4. Be strict: partial semantic similarity is NOT sufficient.\n"
+                "5. Only mark SUFFICIENT if:\n"
+                "   - at least 1 chunk directly contains the answer\n"
+                "   OR\n"
+                "   - 2+ chunks together fully contain the answer\n\n"
+                "OUTPUT FORMAT (STRICT JSON ONLY)"
+            )
+            
             if self.gemini_key:
                 async with httpx.AsyncClient(timeout=10.0) as client:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:generateContent"
@@ -188,9 +188,8 @@ class RAGGenerationService:
                     result = json.loads(data["choices"][0]["message"]["content"])
                     return result.get("decision") == "SUFFICIENT"
         except Exception as e:
-            # If verifier fails (timeout/parsing), default to SUFFICIENT to not block normal generation
-            print(f"QA Verifier failed: {e}")
-            pass
+            # If verifier fails (timeout/parsing/API down), default to SUFFICIENT to not block normal generation
+            logger.error(f"QA Verifier failed: {e}. Defaulting to True to continue pipeline.")
             
         return True
 
@@ -502,28 +501,37 @@ class RAGGenerationService:
                     data = response.json()
                     return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
+            from app.core.circuit_breaker import llm_breaker
+            
+            async def _run_llm_call():
+                if self.gemini_key:
+                    return await retry_with_backoff(_call_gemini)
+                elif self.openai_key:
+                    return await retry_with_backoff(_call_openai)
+                else:
+                    raise Exception("No active LLM key.")
+                    
+            def _llm_fallback():
+                logger.error("LLM circuit breaker fallback triggered.")
+                return "I could not find sufficient information in the uploaded documents."
+
             llm_start = time.perf_counter()
-            if self.gemini_key:
-                model_used = self.gemini_model
-                try:
-                    generated_text = await retry_with_backoff(_call_gemini)
-                except Exception as gemini_err:
-                    import traceback
-                    traceback.print_exc()
-                    model_used = "MockLLM"
-                    generated_text = f"Gemini provider call failed ({str(gemini_err)}). This is a fallback response about '{question}'."
-            elif self.openai_key:
-                model_used = self.openai_model
-                try:
-                    generated_text = await retry_with_backoff(_call_openai)
-                except Exception as openai_err:
-                    import traceback
-                    traceback.print_exc()
-                    model_used = "MockLLM"
-                    generated_text = f"OpenAI provider call failed ({str(openai_err)}). This is a fallback response about '{question}'."
-            elif is_mock:
+            if is_mock:
                 model_used = "MockLLM"
                 generated_text = f"This is a mock cited response about '{question}' for development testing. The retrieved documents contain information regarding NoteAI."
+            else:
+                if self.gemini_key:
+                    model_used = self.gemini_model
+                elif self.openai_key:
+                    model_used = self.openai_model
+                else:
+                    model_used = "None"
+                    
+                try:
+                    generated_text = await llm_breaker.execute(_run_llm_call, _llm_fallback)
+                except Exception as e:
+                    logger.error(f"LLM breaker execution failed: {e}")
+                    generated_text = "I could not find sufficient information in the uploaded documents."
             llm_latency_ms = (time.perf_counter() - llm_start) * 1000.0
 
             # 7. Format sources footnotes
@@ -829,10 +837,21 @@ class RAGGenerationService:
 
         generated_text = ""
 
-        # 6. Stream from LLM API
+        # 6. Stream from LLM API with Circuit Breaker support
+        from app.core.circuit_breaker import llm_breaker
+        is_breaker_open = not is_mock and not llm_breaker.can_execute()
+        
         llm_start = time.perf_counter()
         try:
-            if self.gemini_key:
+            if is_breaker_open:
+                logger.warning("LLM circuit breaker is OPEN. Yielding fallback stream immediately.")
+                model_used = "MockLLM"
+                fallback_text = "I could not find sufficient information in the uploaded documents."
+                for token in fallback_text.split(" "):
+                    generated_text += token + " "
+                    yield f"data: {json.dumps({'type': 'content', 'delta': token + ' '})}\n\n"
+                    await asyncio.sleep(0.02)
+            elif self.gemini_key:
                 model_used = self.gemini_model
                 async with httpx.AsyncClient(timeout=60.0) as client:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.gemini_model}:streamGenerateContent"
@@ -872,7 +891,9 @@ class RAGGenerationService:
                                 except (KeyError, IndexError):
                                     pass
                         await response.aclose()
+                        llm_breaker.record_success()
                     except Exception as gemini_err:
+                        llm_breaker.record_failure()
                         import traceback
                         traceback.print_exc()
                         model_used = "MockLLM"
@@ -924,7 +945,9 @@ class RAGGenerationService:
                                 except Exception:
                                     pass
                         await response.aclose()
+                        llm_breaker.record_success()
                     except Exception as openai_err:
+                        llm_breaker.record_failure()
                         import traceback
                         traceback.print_exc()
                         model_used = "MockLLM"

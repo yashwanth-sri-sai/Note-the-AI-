@@ -6,8 +6,10 @@ from typing import List, Dict, Any, Optional, Union
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.models.document import Document, DocumentChunk, Embedding
-from app.services.embedding import get_embedding_provider
-from app.services.reranking import get_reranker_provider
+from app.services.embedding import get_embedding_provider, LocalEmbeddingProvider
+from app.services.reranking import get_reranker_provider, ScoreBasedReranker
+from app.db.session import safe_db_execute
+from app.core.circuit_breaker import embedding_breaker, reranker_breaker
 
 logger = logging.getLogger("app.services.retrieval")
 
@@ -19,6 +21,8 @@ def calculate_factual_score(text: str) -> float:
     - Presence of 4-digit years (1800-2099) or decade patterns (e.g. 1940s)
     - Presence of historical keywords (started, founded, emerged, origin)
     """
+    if not text or not isinstance(text, str):
+        return 0.0
     text_lower = text.lower()
     
     # 1. Detect years
@@ -54,12 +58,27 @@ class RetrievalService:
         diagnostics: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Perform workspace-scoped semantic similarity search, applying filters, calibrated factual scoring, and reranking."""
-        
-        queries = [query] if isinstance(query, str) else query
-        if not queries:
+        # Phase 4 - Null and Type Safety guards
+        if workspace_id is None:
+            logger.error("Workspace ID is None. Aborting retrieval safely.")
             return []
             
-        original_query = queries[0]
+        if not query:
+            logger.warning("Empty search query received in retrieval. Returning empty context.")
+            return []
+            
+        queries = [query] if isinstance(query, str) else query
+        sanitized_queries = []
+        for q in queries:
+            if q is not None and isinstance(q, str):
+                sanitized_queries.append(q)
+            else:
+                sanitized_queries.append("")
+                
+        if not sanitized_queries:
+            return []
+            
+        original_query = sanitized_queries[0]
         
         # 1. Detect question type
         query_lower = original_query.lower()
@@ -71,48 +90,73 @@ class RetrievalService:
         
         all_raw_candidates = []
         
-        # 2. Generate query embeddings in parallel (Network I/O)
+        # 2. Generate query embeddings in parallel with Circuit Breaker support
         import asyncio
-        query_vectors = await asyncio.gather(
-            *(self.embedding_provider.get_embedding(q) for q in queries)
-        )
         
-        # 3. Execute DB queries sequentially to ensure database safety
-        for query_vector in query_vectors:
-            distance_col = Embedding.embedding.cosine_distance(query_vector)
-            
-            stmt = (
-                select(
-                    DocumentChunk.chunk_uuid,
-                    DocumentChunk.chunk_text,
-                    DocumentChunk.page_number,
-                    DocumentChunk.section_title,
-                    DocumentChunk.token_count,
-                    DocumentChunk.source_reference,
-                    Document.id.label("document_id"),
-                    Document.filename.label("document_name"),
-                    distance_col.label("distance")
-                )
-                .join(DocumentChunk, Embedding.chunk_id == DocumentChunk.id)
-                .join(Document, DocumentChunk.document_id == Document.id)
-                .where(Document.workspace_id == workspace_id)
-                .where(Document.status == "completed")
+        async def _local_fallback_embedding(q_text: str):
+            local_provider = LocalEmbeddingProvider()
+            return await local_provider.get_embedding(q_text)
+
+        async def _get_embedding_with_breaker(q_text: str):
+            text_to_embed = q_text if q_text is not None else ""
+            return await embedding_breaker.execute(
+                self.embedding_provider.get_embedding,
+                _local_fallback_embedding,
+                text_to_embed
             )
             
-            if document_ids:
-                stmt = stmt.where(Document.id.in_(document_ids))
-            if file_types:
-                stmt = stmt.where(Document.content_type.in_(file_types))
-            if date_start:
-                stmt = stmt.where(Document.created_at >= date_start)
-            if date_end:
-                stmt = stmt.where(Document.created_at <= date_end)
+        try:
+            query_vectors = await asyncio.gather(
+                *(_get_embedding_with_breaker(q) for q in sanitized_queries)
+            )
+        except Exception as e:
+            logger.error(f"Failed to generate query embeddings: {e}. Returning empty context.")
+            return []
+        
+        # 3. Execute DB queries sequentially inside safe database wrappers
+        for query_vector in query_vectors:
+            if not query_vector:
+                continue
+            try:
+                distance_col = Embedding.embedding.cosine_distance(query_vector)
                 
-            stmt = stmt.where(distance_col < 0.65)
-            stmt = stmt.order_by("distance").limit(50)
-            
-            result = await self.db.execute(stmt)
-            rows = result.all()
+                stmt = (
+                    select(
+                        DocumentChunk.chunk_uuid,
+                        DocumentChunk.chunk_text,
+                        DocumentChunk.page_number,
+                        DocumentChunk.section_title,
+                        DocumentChunk.token_count,
+                        DocumentChunk.source_reference,
+                        Document.id.label("document_id"),
+                        Document.filename.label("document_name"),
+                        distance_col.label("distance")
+                    )
+                    .join(DocumentChunk, Embedding.chunk_id == DocumentChunk.id)
+                    .join(Document, DocumentChunk.document_id == Document.id)
+                    .where(Document.workspace_id == workspace_id)
+                    .where(Document.status == "completed")
+                )
+                
+                if document_ids:
+                    stmt = stmt.where(Document.id.in_(document_ids))
+                if file_types:
+                    stmt = stmt.where(Document.content_type.in_(file_types))
+                if date_start:
+                    stmt = stmt.where(Document.created_at >= date_start)
+                if date_end:
+                    stmt = stmt.where(Document.created_at <= date_end)
+                    
+                stmt = stmt.where(distance_col < 0.65)
+                stmt = stmt.order_by("distance").limit(50)
+                
+                # Wrap with transaction protection safe_db_execute
+                result = await safe_db_execute(self.db, stmt)
+                rows = result.all() if result else []
+            except Exception as db_exc:
+                # Phase 5 Rule 1: retrieval fails -> return empty context safely
+                logger.error(f"Database retrieval search query failed: {db_exc}. Returning empty context candidates.")
+                rows = []
             
             # Format candidates, storing similarity_score, factual_score, and pre-rerank final_score
             for row in rows:
@@ -171,9 +215,28 @@ class RetrievalService:
             if not is_duplicate:
                 deduped_candidates.append(chunk)
             
-        # 5. Apply reranker to sort down to candidates pool
+        # 5. Apply reranker to sort down to candidates pool with Circuit Breaker support
         expanded_limit = max(limit * 3, 30)
-        reranked_results = await self.reranker_provider.rerank(original_query, deduped_candidates, top_n=expanded_limit)
+        
+        async def _rerank_fallback(q: str, cands: list, top_n: int):
+            fallback_reranker = ScoreBasedReranker()
+            return await fallback_reranker.rerank(q, cands, top_n)
+            
+        try:
+            reranked_results = await reranker_breaker.execute(
+                self.reranker_provider.rerank,
+                _rerank_fallback,
+                original_query,
+                deduped_candidates,
+                top_n=expanded_limit
+            )
+        except Exception as rerank_err:
+            # Phase 5 Rule 2: reranker fails -> fallback to vector order
+            logger.error(f"Reranking stage failed: {rerank_err}. Falling back to vector scoring.")
+            reranked_results = await _rerank_fallback(original_query, deduped_candidates, top_n=expanded_limit)
+            
+        if not reranked_results:
+            reranked_results = []
         
         # Compute final post-rerank final_score and output logs
         for chunk in reranked_results:

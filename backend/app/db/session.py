@@ -54,3 +54,46 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
+
+
+import logging
+from sqlalchemy.exc import DBAPIError, OperationalError
+
+safe_db_logger = logging.getLogger("app.db.safe_execute")
+
+
+async def safe_db_execute(session: AsyncSession, statement, *args, **kwargs):
+    """Executes a SQL query/statement safely.
+    
+    - Wraps operations with rollback on exception
+    - Retries once on transient OperationalError/DBAPIError
+    """
+    try:
+        # First attempt
+        result = await session.execute(statement, *args, **kwargs)
+        return result
+    except (OperationalError, DBAPIError) as e:
+        safe_db_logger.warning(f"Transient database error caught: {e}. Retrying query...")
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        try:
+            # Second attempt (retry)
+            result = await session.execute(statement, *args, **kwargs)
+            return result
+        except Exception as retry_exc:
+            safe_db_logger.error(f"Retry query failed: {retry_exc}")
+            try:
+                await session.rollback()
+            except Exception:
+                pass
+            raise
+    except Exception as e:
+        safe_db_logger.error(f"Database query error: {e}")
+        try:
+            await session.rollback()
+        except Exception:
+            pass
+        raise
+
