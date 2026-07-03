@@ -103,15 +103,6 @@ export const AppRoutes: React.FC = () => {
           path="/dashboard"
           element={
             <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="/dashboard-v2"
-          element={
-            <ProtectedRoute>
               <DashboardV2 />
             </ProtectedRoute>
           }
