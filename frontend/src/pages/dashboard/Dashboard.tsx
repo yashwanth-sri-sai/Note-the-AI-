@@ -8,7 +8,7 @@ import { useTags } from "@/hooks/useTags";
 import {
   BrainCircuit, LayoutDashboard, FileText, Folder, Tag, Star, Settings, LogOut,
   Menu, Bell, Search, X, ChevronDown, Sun, Moon, Files, Layers, GraduationCap, BarChart3,
-  ChevronRight, Plus, Upload
+  ChevronRight, Plus, Upload, ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DashboardOverview } from "./DashboardOverview";
@@ -22,6 +22,7 @@ import { DocumentsPage } from "./DocumentsPage";
 import { FlashcardsPage } from "./FlashcardsPage";
 import { QuizzesPage } from "./QuizzesPage";
 import { AnalyticsPage } from "./AnalyticsPage";
+import { EvaluationDashboard } from "./EvaluationDashboard";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { getNotePreview } from "@/lib/utils";
 
@@ -230,6 +231,7 @@ export const Dashboard: React.FC = () => {
       { id: "flashcards", label: "Flashcards", icon: Layers, color: "text-violet" },
       { id: "quizzes", label: "Quizzes", icon: GraduationCap, color: "text-rose" },
       { id: "analytics", label: "Analytics", icon: BarChart3, color: "text-cyan" },
+      { id: "evaluation", label: "Evaluation", icon: ShieldCheck, color: "text-emerald" },
     ];
 
     const isItemActive = (item: any) => {
@@ -544,6 +546,8 @@ export const Dashboard: React.FC = () => {
         return <QuizzesPage />;
       case "analytics":
         return <AnalyticsPage />;
+      case "evaluation":
+        return <EvaluationDashboard />;
       case "settings":
         return <SettingsPage />;
       default:

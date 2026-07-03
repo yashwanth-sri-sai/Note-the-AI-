@@ -11,7 +11,8 @@ type DashboardTab =
   | "flashcards"
   | "quizzes"
   | "analytics"
-  | "settings";
+  | "settings"
+  | "evaluation";
 
 interface UIState {
   theme: "light" | "dark";

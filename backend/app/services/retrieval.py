@@ -128,13 +128,64 @@ class RetrievalService:
             if not is_duplicate:
                 deduped_candidates.append(chunk)
             
-        # 5. Apply reranker to filter and sort down to the top limit (default 10)
-        # We always use the original query (first item) for reranking the pooled candidates
-        reranked_results = await self.reranker_provider.rerank(original_query, deduped_candidates, top_n=limit)
+        # 5. Apply reranker to filter and sort down to a larger candidate pool
+        # We fetch more candidates so the diversity selector has room to maneuver.
+        expanded_limit = max(limit * 3, 30)
+        reranked_results = await self.reranker_provider.rerank(original_query, deduped_candidates, top_n=expanded_limit)
         
+        # 6. Diversity Selector
+        selected_chunks = []
+        skipped_chunks = []
+        page_counts = {}
+        section_counts = {}
+        
+        # Pass 1: Strict constraints
+        for chunk in reranked_results:
+            doc_id = str(chunk.get("document_id"))
+            page_num = chunk.get("page_number")
+            section = chunk.get("section_title")
+            
+            page_key = f"{doc_id}_{page_num}" if page_num else None
+            section_key = f"{doc_id}_{section}" if section else None
+            
+            can_add = True
+            
+            if page_key and page_counts.get(page_key, 0) >= 2:
+                can_add = False
+                
+            if section_key and section_counts.get(section_key, 0) >= 3:
+                can_add = False
+                
+            if can_add:
+                selected_chunks.append(chunk)
+                if page_key:
+                    page_counts[page_key] = page_counts.get(page_key, 0) + 1
+                if section_key:
+                    section_counts[section_key] = section_counts.get(section_key, 0) + 1
+            else:
+                skipped_chunks.append(chunk)
+                
+            if len(selected_chunks) >= limit:
+                break
+                
+        # Pass 2: Relaxed constraints (fill remaining slots if document is short)
+        if len(selected_chunks) < limit and skipped_chunks:
+            slots_to_fill = limit - len(selected_chunks)
+            selected_chunks.extend(skipped_chunks[:slots_to_fill])
+            
         if diagnostics is not None:
             diagnostics["retrieval_count_before_rerank"] = len(all_raw_candidates)
             diagnostics["retrieval_count_after_dedup"] = len(deduped_candidates)
             diagnostics["retrieval_count_after_rerank"] = len(reranked_results)
+            diagnostics["chunks_before_diversity"] = len(reranked_results)
+            diagnostics["chunks_after_diversity"] = len(selected_chunks)
             
-        return reranked_results
+            unique_docs = set(str(c.get("document_id")) for c in selected_chunks if c.get("document_id"))
+            unique_pages = set(f"{c.get('document_id')}_{c.get('page_number')}" for c in selected_chunks if c.get("page_number"))
+            unique_sections = set(f"{c.get('document_id')}_{c.get('section_title')}" for c in selected_chunks if c.get("section_title"))
+            
+            diagnostics["unique_documents"] = len(unique_docs)
+            diagnostics["unique_pages"] = len(unique_pages)
+            diagnostics["unique_sections"] = len(unique_sections)
+            
+        return selected_chunks

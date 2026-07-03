@@ -83,4 +83,10 @@ class Settings(BaseSettings):
     DEFAULT_CONTEXT_TOKEN_LIMIT: int = 30000
     DEBUG_RAG: bool = False
 
+    # Evaluation & Regression Thresholds
+    EVAL_RECALL_DROP_THRESHOLD: float = 0.05
+    EVAL_GROUNDEDNESS_DROP_THRESHOLD: float = 0.05
+    EVAL_HALLUCINATION_INC_THRESHOLD: float = 0.05
+    EVAL_LATENCY_INC_THRESHOLD: float = 0.30
+
 settings = Settings()

@@ -101,24 +101,47 @@ async def run_evaluation_for_case(workspace_id: uuid.UUID, test_case: Dict[str, 
     citation_accuracy = calculate_citation_accuracy(expected_citations, answer) if mode != "fast" else 0.0
     hallucination_rate = calculate_hallucination_rate(groundedness)
     
+    # 5. Get Pre-Rerank Chunks (Observe only, do not modify prod)
+    # We execute the semantic search manually to peek at what the DB returns before reranking
+    pre_rerank_chunk_ids = []
+    try:
+        from sqlalchemy import select
+        from app.db.models.document import DocumentChunk, Document, Embedding
+        query_vector = await retrieval_service.embedding_provider.get_embedding(question)
+        distance_col = Embedding.embedding.cosine_distance(query_vector)
+        stmt = (
+            select(DocumentChunk.chunk_uuid)
+            .join(Embedding, Embedding.chunk_id == DocumentChunk.id)
+            .join(Document, DocumentChunk.document_id == Document.id)
+            .where(Document.workspace_id == workspace_id)
+            .where(distance_col < 0.65)
+            .order_by(distance_col).limit(50)
+        )
+        res = await db.execute(stmt)
+        pre_rerank_chunk_ids = [str(r[0]) for r in res.all()]
+    except Exception as e:
+        print(f"Failed to peek pre-rerank chunks: {e}")
+        
+    retrieved_pages = list(set([chunk.get("page_number") for chunk in accepted_chunks if chunk.get("page_number")]))
+    expected_pages = test_case.get("relevant_pages", [])
+    
     return {
-        "id": test_case["id"],
+        "question_id": test_case["id"],
         "question": question,
-        "answer": answer,
-        "confidence": confidence,
-        "latency": total_latency,
-        "time_to_first_token": time_to_first_token,
-        "retrieval_latency": retrieval_latency,
-        "retrieved_docs": retrieved_docs,
-        "metrics": {
-            "precision_at_k": precision,
-            "recall_at_k": recall,
-            "chunk_precision_at_k": chunk_precision,
-            "chunk_recall_at_k": chunk_recall,
-            "faithfulness": faithfulness,
-            "answer_relevancy": relevancy,
-            "groundedness": groundedness,
-            "hallucination_rate": hallucination_rate,
-            "citation_accuracy": citation_accuracy
-        }
+        "expected_answer": test_case.get("expected_answer", ""),
+        "generated_answer": answer,
+        "expected_documents": expected_citations,
+        "retrieved_documents": retrieved_docs,
+        "expected_chunk_ids": expected_chunk_uuids,
+        "retrieved_chunk_ids": retrieved_chunk_uuids,
+        "expected_pages": expected_pages,
+        "retrieved_pages": retrieved_pages,
+        "latency_ms": total_latency * 1000.0,
+        "retrieval_recall": chunk_recall,
+        "retrieval_precision": chunk_precision,
+        "groundedness": groundedness,
+        "faithfulness": faithfulness,
+        "hallucination_score": hallucination_rate,
+        "citation_accuracy": citation_accuracy,
+        "pre_rerank_chunk_ids": pre_rerank_chunk_ids
     }

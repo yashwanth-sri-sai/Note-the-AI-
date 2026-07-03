@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, users, folders, notes, tags, workspaces, ai, documents, chat, metrics, admin_metrics, knowledge
+from app.api.v1.endpoints import auth, users, folders, notes, tags, workspaces, ai, documents, chat, metrics, admin_metrics, knowledge, evaluation
 
 api_router = APIRouter()
 
@@ -15,4 +15,4 @@ api_router.include_router(chat.router, prefix="/chat", tags=["Chat"])
 api_router.include_router(metrics.router, prefix="/metrics", tags=["Telemetry & Dashboards"])
 api_router.include_router(admin_metrics.router, prefix="/admin/metrics", tags=["Admin Telemetry"])
 api_router.include_router(knowledge.router, prefix="/knowledge", tags=["Knowledge Sources"])
-
+api_router.include_router(evaluation.router, prefix="/evaluation", tags=["Evaluation Dashboard"])

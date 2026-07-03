@@ -1,0 +1,118 @@
+{
+  "run_id": "curr_id",
+  "timestamp": "20260703_103020",
+  "git_commit": "def",
+  "branch": "main",
+  "workspace_id": "123",
+  "mode": "fast",
+  "summary": {
+    "questions": 2,
+    "retrieval": {
+      "precision_at_5": 0.25,
+      "recall_at_5": 0.0,
+      "avg_similarity": 0.0,
+      "avg_chunks": 0.0,
+      "avg_tokens": 0.0
+    },
+    "generation": {
+      "faithfulness": 0.0,
+      "groundedness": 0.45,
+      "hallucination_rate": 0.25
+    },
+    "performance": {
+      "avg_latency_ms": 1.25,
+      "min_latency_ms": 0.0,
+      "max_latency_ms": 0.0
+    }
+  },
+  "failure_summary": {
+    "total_failed": 2,
+    "retrieval_failures": 1,
+    "rerank_failures": 1,
+    "chunking_failures": 0,
+    "prompt_failures": 0,
+    "hallucinations": 0,
+    "citation_failures": 0,
+    "unknown_failures": 0,
+    "top_failing_documents": {
+      "doc1.pdf": 1,
+      "doc2.pdf": 1
+    },
+    "top_failing_pages": {
+      "1": 1,
+      "3": 1
+    }
+  },
+  "question_results": [
+    {
+      "question_id": "tc-001",
+      "question": "What is X?",
+      "expected_answer": "X is 1",
+      "generated_answer": "X is 2",
+      "expected_documents": [
+        "doc1.pdf"
+      ],
+      "retrieved_documents": [
+        "doc2.pdf"
+      ],
+      "expected_chunk_ids": [
+        "chunk1"
+      ],
+      "retrieved_chunk_ids": [
+        "chunk2"
+      ],
+      "expected_pages": [
+        1
+      ],
+      "retrieved_pages": [
+        2
+      ],
+      "latency_ms": 1500.0,
+      "retrieval_recall": 0.0,
+      "retrieval_precision": 0.0,
+      "groundedness": 0.0,
+      "faithfulness": 0.0,
+      "hallucination_score": 0.5,
+      "citation_accuracy": 0.0,
+      "failure_type": "RETRIEVAL_FAILURE",
+      "failure_reason": "Expected chunk(s) ['chunk1'] were never retrieved from vector DB.",
+      "pre_rerank_chunk_ids": []
+    },
+    {
+      "question_id": "tc-002",
+      "question": "What is Y?",
+      "expected_answer": "Y is 1",
+      "generated_answer": "Y is 1",
+      "expected_documents": [
+        "doc2.pdf"
+      ],
+      "retrieved_documents": [
+        "doc2.pdf"
+      ],
+      "expected_chunk_ids": [
+        "chunk3"
+      ],
+      "retrieved_chunk_ids": [
+        "chunk4"
+      ],
+      "expected_pages": [
+        3
+      ],
+      "retrieved_pages": [
+        3
+      ],
+      "latency_ms": 1000.0,
+      "retrieval_recall": 0.0,
+      "retrieval_precision": 0.5,
+      "groundedness": 0.9,
+      "faithfulness": 0.9,
+      "hallucination_score": 0.0,
+      "citation_accuracy": 1.0,
+      "failure_type": "RERANK_FAILURE",
+      "failure_reason": "Expected chunk(s) ['chunk3'] were retrieved from DB but excluded by reranker.",
+      "pre_rerank_chunk_ids": [
+        "chunk3"
+      ]
+    }
+  ]
+}
