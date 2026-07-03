@@ -17,11 +17,25 @@ const queryClient = new QueryClient({
 
 function App() {
   const initAuth = useAuthStore((state) => state.initAuth);
+  const isLoading = useAuthStore((state) => state.isLoading);
 
   // Initialize session verification on boot
   useEffect(() => {
     initAuth();
   }, [initAuth]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+          <p className="text-xs text-muted-foreground animate-pulse">
+            Verifying secure workspace session...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Invalidate queries when workspace changes
   useEffect(() => {

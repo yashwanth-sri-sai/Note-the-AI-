@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
 import { useNotes, useCreateNote } from "@/hooks/useNotes";
@@ -62,6 +63,49 @@ export const DashboardV2: React.FC = () => {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Sync Zustand state to URL path on change
+  useEffect(() => {
+    const pathParts = location.pathname.split("/");
+    const lastPart = pathParts[pathParts.length - 1];
+    if (activeTab && lastPart !== activeTab) {
+      if (location.pathname.startsWith("/dashboard")) {
+        navigate(`/dashboard/${activeTab}`, { replace: false });
+      }
+    }
+  }, [activeTab, navigate, location.pathname]);
+
+  // Sync URL path to Zustand activeTab on change
+  useEffect(() => {
+    const pathParts = location.pathname.split("/");
+    const lastPart = pathParts[pathParts.length - 1];
+    
+    const tabMap: Record<string, string> = {
+      overview: "overview",
+      notes: "notes",
+      folders: "folders",
+      favorites: "favorites",
+      tags: "tags",
+      chat: "chat",
+      documents: "documents",
+      flashcards: "flashcards",
+      quizzes: "quizzes",
+      analytics: "analytics",
+      evaluation: "evaluation",
+      settings: "settings"
+    };
+
+    if (tabMap[lastPart]) {
+      if (activeTab !== tabMap[lastPart]) {
+        setActiveTab(tabMap[lastPart] as any);
+      }
+    } else if (location.pathname === "/dashboard" || location.pathname === "/dashboard/") {
+      setActiveTab("overview");
+    }
+  }, [location.pathname, activeTab, setActiveTab]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -728,14 +772,14 @@ export const DashboardV2: React.FC = () => {
         <main className="flex-grow p-6 overflow-y-auto scrollbar bg-background">
           <AnimatePresence mode="wait">
             <motion.div
-              key={activeTab + (activeFolderId || "") + (activeTagId || "")}
+              key={location.pathname}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.15, ease: "easeOut" }}
               className="w-full h-full"
             >
-              {renderContent()}
+              <Outlet />
             </motion.div>
           </AnimatePresence>
         </main>
