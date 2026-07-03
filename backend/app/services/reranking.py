@@ -12,7 +12,7 @@ class RerankerProvider(Protocol):
 class ScoreBasedReranker:
     """Fallback reranker that sorts candidates by vector similarity score."""
     async def rerank(self, query: str, candidates: List[Dict[str, Any]], top_n: int = 5) -> List[Dict[str, Any]]:
-        sorted_candidates = sorted(candidates, key=lambda x: x.get("similarity_score", 0.0), reverse=True)
+        sorted_candidates = sorted(candidates, key=lambda x: x.get("final_score", x.get("similarity_score", 0.0)), reverse=True)
         return sorted_candidates[:top_n]
 
 
@@ -27,8 +27,8 @@ class CohereReranker:
         if not candidates:
             return []
 
-        # Maintain original vector rank for diagnostics
-        sorted_by_vector = sorted(candidates, key=lambda x: x.get("similarity_score", 0.0), reverse=True)
+        # Maintain original vector rank for diagnostics, prioritizing final_score
+        sorted_by_vector = sorted(candidates, key=lambda x: x.get("final_score", x.get("similarity_score", 0.0)), reverse=True)
         
         # Prepare docs for Cohere
         docs = [c.get("chunk_text", "") for c in sorted_by_vector]

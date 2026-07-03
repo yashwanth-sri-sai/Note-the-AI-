@@ -1,5 +1,6 @@
 import uuid
 import re
+import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Union
 from sqlalchemy import select
@@ -8,29 +9,31 @@ from app.db.models.document import Document, DocumentChunk, Embedding
 from app.services.embedding import get_embedding_provider
 from app.services.reranking import get_reranker_provider
 
+logger = logging.getLogger("app.services.retrieval")
 
-def calculate_factual_boost(text: str) -> float:
-    """Calculates keyword and temporal pattern boost for factual queries.
+
+def calculate_factual_score(text: str) -> float:
+    """Calculates a normalized factual score between 0.0 and 1.0.
     
-    Boosts:
-    - 0.25 per 4-digit year (1800-2099) or decade pattern (1940s, 1960s)
-    - 0.15 per historical indicator keyword (origin, started, founded, emerged)
+    Signals:
+    - Presence of 4-digit years (1800-2099) or decade patterns (e.g. 1940s)
+    - Presence of historical keywords (started, founded, emerged, origin)
     """
-    boost = 0.0
     text_lower = text.lower()
     
-    # Match years/decades like 1940s, 1960's, 2020, 1850
+    # 1. Detect years
     year_pattern = r'\b(18|19|20)\d{2}(s|\'s)?\b'
     year_matches = re.findall(year_pattern, text, re.IGNORECASE)
-    if year_matches:
-        boost += 0.25 * len(year_matches)
-        
-    boost_words = ["origin", "started", "founded", "emerged"]
-    for word in boost_words:
-        if word in text_lower:
-            boost += 0.15 * text_lower.count(word)
-            
-    return boost
+    has_year = 1.0 if year_matches else 0.0
+    
+    # 2. Detect keywords
+    keywords = ["started", "founded", "emerged", "origin"]
+    keyword_matches = sum(1 for kw in keywords if kw in text_lower)
+    keyword_score = min(keyword_matches / 2.0, 1.0)  # 0.5 per unique keyword, capped at 1.0
+    
+    # Linear combination normalized between 0.0 and 1.0
+    factual_score = 0.6 * has_year + 0.4 * keyword_score
+    return min(max(factual_score, 0.0), 1.0)
 
 
 class RetrievalService:
@@ -50,7 +53,7 @@ class RetrievalService:
         date_end: Optional[datetime] = None,
         diagnostics: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
-        """Perform workspace-scoped semantic similarity search, applying filters, factual boosting, and reranking."""
+        """Perform workspace-scoped semantic similarity search, applying filters, calibrated factual scoring, and reranking."""
         
         queries = [query] if isinstance(query, str) else query
         if not queries:
@@ -111,19 +114,24 @@ class RetrievalService:
             result = await self.db.execute(stmt)
             rows = result.all()
             
-            # Format candidates, applying factual boosting if applicable
+            # Format candidates, storing similarity_score, factual_score, and pre-rerank final_score
             for row in rows:
                 similarity = 1.0 - float(row.distance)
                 chunk_text = row.chunk_text or ""
                 
-                factual_boost = 0.0
+                factual_score = 0.0
                 if is_factual:
-                    factual_boost = calculate_factual_boost(chunk_text)
+                    factual_score = calculate_factual_score(chunk_text)
                     
+                # Pre-rerank combined score
+                final_score = (0.75 * similarity) + (0.25 * factual_score) if is_factual else similarity
+                
                 all_raw_candidates.append({
                     "chunk_uuid": row.chunk_uuid,
                     "chunk_text": chunk_text,
-                    "similarity_score": similarity + factual_boost,
+                    "similarity_score": similarity,
+                    "factual_score": factual_score,
+                    "final_score": final_score,
                     "document_name": row.document_name,
                     "document_id": row.document_id,
                     "page_number": row.page_number,
@@ -132,8 +140,8 @@ class RetrievalService:
                     "source_reference": row.source_reference
                 })
         
-        # Sort candidates by combined score
-        all_raw_candidates.sort(key=lambda x: x["similarity_score"], reverse=True)
+        # Sort candidates by combined pre-rerank score
+        all_raw_candidates.sort(key=lambda x: x["final_score"], reverse=True)
 
         # 4. Deduplicate candidates using overlap check
         deduped_candidates = []
@@ -167,14 +175,34 @@ class RetrievalService:
         expanded_limit = max(limit * 3, 30)
         reranked_results = await self.reranker_provider.rerank(original_query, deduped_candidates, top_n=expanded_limit)
         
-        # Ensure final reranker prioritizes factual grounding over pure semantic similarity
-        if is_factual:
-            for chunk in reranked_results:
-                text_val = chunk.get("chunk_text", "")
-                boost = calculate_factual_boost(text_val)
-                chunk["similarity_score"] = chunk["similarity_score"] + boost
-            # Re-sort post-rerank based on combined score
-            reranked_results.sort(key=lambda x: x.get("similarity_score", 0.0), reverse=True)
+        # Compute final post-rerank final_score and output logs
+        for chunk in reranked_results:
+            semantic_score = chunk.get("similarity_score", 0.0)
+            factual_score = chunk.get("factual_score", 0.0)
+            
+            if is_factual:
+                final_score = (0.75 * semantic_score) + (0.25 * factual_score)
+            else:
+                final_score = semantic_score
+                
+            chunk["semantic_score"] = semantic_score
+            chunk["factual_score"] = factual_score
+            chunk["final_score"] = final_score
+            
+            # Map final_score back to similarity_score for downstream compatibility
+            chunk["similarity_score"] = final_score
+            
+            # Log debug metrics for observability
+            logger.debug(
+                f"Calibrated Chunk: {chunk.get('chunk_uuid')} | "
+                f"Query: '{original_query[:30]}' | "
+                f"similarity_score (semantic): {semantic_score:.4f} | "
+                f"factual_score: {factual_score:.4f} | "
+                f"final_score (calibrated): {final_score:.4f}"
+            )
+            
+        # Re-sort final list post-rerank based on final_score
+        reranked_results.sort(key=lambda x: x.get("final_score", 0.0), reverse=True)
             
         # 6. Diversity Selector
         selected_chunks = []
