@@ -7,6 +7,7 @@ import { Register } from "@/pages/auth/Register";
 import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { ResetPassword } from "@/pages/auth/ResetPassword";
 import { Dashboard } from "@/pages/dashboard/Dashboard";
+import { DashboardV2 } from "@/pages/dashboard/DashboardV2";
 
 // 1. Protected Route Guard (Forces Login)
 export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
@@ -103,6 +104,15 @@ export const AppRoutes: React.FC = () => {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dashboard-v2"
+          element={
+            <ProtectedRoute>
+              <DashboardV2 />
             </ProtectedRoute>
           }
         />
