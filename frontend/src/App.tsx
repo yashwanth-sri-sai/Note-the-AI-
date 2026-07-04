@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
 import { AppRoutes } from "@/routes/index"; // Points to src/routes/index.tsx
+import { RouteErrorBoundary } from "@/components/layout/RouteErrorBoundary";
 
 // Create TanStack Query Client
 const queryClient = new QueryClient({
@@ -55,7 +56,9 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <AppRoutes />
+      <RouteErrorBoundary>
+        <AppRoutes />
+      </RouteErrorBoundary>
     </QueryClientProvider>
   );
 }

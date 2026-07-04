@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { PageSkeleton } from "@/components/layout/PageSkeleton";
 import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
 import { useNotes, useCreateNote } from "@/hooks/useNotes";
@@ -45,8 +46,8 @@ export const DashboardV2: React.FC = () => {
   } = useUIStore();
 
   const { data: notes } = useNotes();
-  const { data: folders } = useFolders();
-  const { data: tags } = useTags();
+  const { data: folders, isLoading: foldersLoading, isError: foldersError, refetch: refetchFolders } = useFolders();
+  const { data: tags, isLoading: tagsLoading, isError: tagsError, refetch: refetchTags } = useTags();
 
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -415,30 +416,49 @@ export const DashboardV2: React.FC = () => {
               </button>
               {(!collapsed || isMobileView) && expandFolders && (
                 <div className="pl-5 pr-2 py-0.5 space-y-0.5 border-l border-white/[0.03] ml-4">
-                  {folders?.slice(0, 4).map((f) => (
-                    <button
-                      key={f.id}
-                      onClick={() => {
-                        setActiveFolderId(f.id);
-                        if (isMobileView) setMobileSidebarOpen(false);
-                      }}
-                      className={`flex items-center gap-2 w-full text-left px-2 py-1 text-[10px] font-medium rounded truncate hover:text-primary transition-colors ${
-                        activeFolderId === f.id ? "text-primary bg-primary/5 font-semibold" : "text-muted-foreground/60"
-                      }`}
-                    >
-                      <span className="w-1 h-1 rounded-full bg-primary/60 shrink-0" />
-                      <span className="truncate">{f.name}</span>
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => {
-                      setActiveTab("folders");
-                      if (isMobileView) setMobileSidebarOpen(false);
-                    }}
-                    className="w-full text-left px-2 py-1 text-[10px] text-primary hover:underline font-semibold"
-                  >
-                    View All...
-                  </button>
+                  {foldersLoading ? (
+                    <div className="space-y-1.5 py-1">
+                      <div className="h-2.5 w-16 rounded bg-white/[0.03] animate-pulse" />
+                      <div className="h-2.5 w-20 rounded bg-white/[0.03] animate-pulse" />
+                    </div>
+                  ) : foldersError ? (
+                    <div className="py-1 px-1 text-[9px] text-red-400 flex items-center justify-between gap-2">
+                      <span>Failed to load</span>
+                      <button
+                        onClick={() => refetchFolders()}
+                        className="text-primary hover:underline font-bold focus:outline-none"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {folders?.slice(0, 4).map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => {
+                            setActiveFolderId(f.id);
+                            if (isMobileView) setMobileSidebarOpen(false);
+                          }}
+                          className={`flex items-center gap-2 w-full text-left px-2 py-1 text-[10px] font-medium rounded truncate hover:text-primary transition-colors ${
+                            activeFolderId === f.id ? "text-primary bg-primary/5 font-semibold" : "text-muted-foreground/60"
+                          }`}
+                        >
+                          <span className="w-1 h-1 rounded-full bg-primary/60 shrink-0" />
+                          <span className="truncate">{f.name}</span>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => {
+                          setActiveTab("folders");
+                          if (isMobileView) setMobileSidebarOpen(false);
+                        }}
+                        className="w-full text-left px-2 py-1 text-[10px] text-primary hover:underline font-semibold"
+                      >
+                        View All...
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -487,33 +507,52 @@ export const DashboardV2: React.FC = () => {
               </button>
               {(!collapsed || isMobileView) && expandTags && (
                 <div className="pl-5 pr-2 py-0.5 space-y-0.5 border-l border-white/[0.03] ml-4">
-                  {tags?.slice(0, 4).map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => {
-                        setActiveTagId(t.id);
-                        if (isMobileView) setMobileSidebarOpen(false);
-                      }}
-                      className={`flex items-center gap-2 w-full text-left px-2 py-1 text-[10px] font-medium rounded truncate hover:text-primary transition-colors ${
-                        activeTagId === t.id ? "text-primary bg-primary/5 font-semibold" : "text-muted-foreground/60"
-                      }`}
-                    >
-                      <span
-                        style={{ backgroundColor: t.color }}
-                        className="w-1 h-1 rounded-full shrink-0"
-                      />
-                      <span className="truncate">{t.name}</span>
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => {
-                      setActiveTab("tags");
-                      if (isMobileView) setMobileSidebarOpen(false);
-                    }}
-                    className="w-full text-left px-2 py-1 text-[10px] text-primary hover:underline font-semibold"
-                  >
-                    Manage Tags...
-                  </button>
+                  {tagsLoading ? (
+                    <div className="space-y-1.5 py-1">
+                      <div className="h-2.5 w-16 rounded bg-white/[0.03] animate-pulse" />
+                      <div className="h-2.5 w-20 rounded bg-white/[0.03] animate-pulse" />
+                    </div>
+                  ) : tagsError ? (
+                    <div className="py-1 px-1 text-[9px] text-red-400 flex items-center justify-between gap-2">
+                      <span>Failed to load</span>
+                      <button
+                        onClick={() => refetchTags()}
+                        className="text-primary hover:underline font-bold focus:outline-none"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {tags?.slice(0, 4).map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => {
+                            setActiveTagId(t.id);
+                            if (isMobileView) setMobileSidebarOpen(false);
+                          }}
+                          className={`flex items-center gap-2 w-full text-left px-2 py-1 text-[10px] font-medium rounded truncate hover:text-primary transition-colors ${
+                            activeTagId === t.id ? "text-primary bg-primary/5 font-semibold" : "text-muted-foreground/60"
+                          }`}
+                        >
+                          <span
+                            style={{ backgroundColor: t.color }}
+                            className="w-1 h-1 rounded-full shrink-0"
+                          />
+                          <span className="truncate">{t.name}</span>
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => {
+                          setActiveTab("tags");
+                          if (isMobileView) setMobileSidebarOpen(false);
+                        }}
+                        className="w-full text-left px-2 py-1 text-[10px] text-primary hover:underline font-semibold"
+                      >
+                        Manage Tags...
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -779,7 +818,9 @@ export const DashboardV2: React.FC = () => {
               transition={{ duration: 0.15, ease: "easeOut" }}
               className="w-full h-full"
             >
-              <Outlet />
+              <Suspense fallback={<PageSkeleton />}>
+                <Outlet />
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>

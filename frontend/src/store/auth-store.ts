@@ -34,6 +34,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: true,
         isLoading: false,
       });
+      // Preload critical dashboard routes in the background
+      import("@/pages/dashboard/DashboardOverview");
+      import("@/pages/dashboard/NotesPage");
     } catch (error) {
       setAccessToken(null);
       set({ user: null, isAuthenticated: false, isLoading: false });
@@ -66,6 +69,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: true,
         isLoading: false,
       });
+      // Preload critical dashboard routes in the background
+      import("@/pages/dashboard/DashboardOverview");
+      import("@/pages/dashboard/NotesPage");
     } catch (error) {
       setAccessToken(null);
       set({ user: null, isAuthenticated: false, isLoading: false });
@@ -118,6 +124,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: true,
         isLoading: false,
       });
+      // Preload critical dashboard routes in the background
+      import("@/pages/dashboard/DashboardOverview");
+      import("@/pages/dashboard/NotesPage");
     } catch (err) {
       setAccessToken(null);
       set({ user: null, isAuthenticated: false, isLoading: false });

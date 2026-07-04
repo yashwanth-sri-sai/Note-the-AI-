@@ -54,6 +54,7 @@ export const QuizzesPage: React.FC = () => {
 
   // Loading states
   const [quizzesLoading, setQuizzesLoading] = useState(false);
+  const [quizzesError, setQuizzesError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -65,6 +66,7 @@ export const QuizzesPage: React.FC = () => {
     setActiveQuiz(null);
     setSubmissionResult(null);
     setSelectedAnswers({});
+    setQuizzesError(null);
   }, [activeWorkspaceId]);
 
   // Auto-select active note if navigated from notes page
@@ -85,6 +87,7 @@ export const QuizzesPage: React.FC = () => {
   // Load quizzes for selected source using the new unified backend route
   const fetchQuizzes = async (sourceType: SourceType, sourceId: string) => {
     setQuizzesLoading(true);
+    setQuizzesError(null);
     try {
       const response = await apiClient.get(`/knowledge/${sourceType}/${sourceId}/quizzes`);
       setQuizzes(response.data);
@@ -93,6 +96,7 @@ export const QuizzesPage: React.FC = () => {
       setSelectedAnswers({});
     } catch (err) {
       console.error("Error loading quizzes:", err);
+      setQuizzesError("Failed to load quizzes. Please check your network connection and retry.");
     } finally {
       setQuizzesLoading(false);
     }
@@ -220,9 +224,36 @@ export const QuizzesPage: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-grow flex items-center justify-center clay-panel h-full"
+              className="flex-grow flex flex-col p-6 space-y-4 clay-panel h-full"
             >
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="flex justify-between items-center pb-4 border-b border-white/[0.02] animate-pulse">
+                <div className="h-4 w-32 rounded bg-white/[0.04]" />
+                <div className="h-8 w-24 rounded-lg bg-white/[0.03]" />
+              </div>
+              <div className="space-y-3 flex-grow overflow-y-auto">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="p-5 rounded-2xl border border-white/[0.03] bg-white/[0.01] space-y-2 animate-pulse">
+                    <div className="h-3.5 w-1/3 rounded bg-white/[0.04]" />
+                    <div className="h-2.5 w-1/4 rounded bg-white/[0.02]" />
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          ) : quizzesError ? (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-grow flex flex-col items-center justify-center text-center p-8 space-y-3 clay-panel h-full"
+            >
+              <p className="text-xs text-red-400 font-semibold">{quizzesError}</p>
+              <button
+                onClick={() => fetchQuizzes(selectedSourceType!, selectedSourceId!)}
+                className="px-4 py-2 rounded-lg border border-white/[0.08] hover:bg-white/[0.02] text-xs font-bold text-foreground transition-all duration-150"
+              >
+                Try Again
+              </button>
             </motion.div>
           ) : !activeQuiz ? (
             <motion.div

@@ -35,6 +35,7 @@ export const FlashcardsPage: React.FC = () => {
   
   // Loading states
   const [cardsLoading, setCardsLoading] = useState(false);
+  const [cardsError, setCardsError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -45,6 +46,7 @@ export const FlashcardsPage: React.FC = () => {
     setFlashcards([]);
     setCurrentIndex(0);
     setIsFlipped(false);
+    setCardsError(null);
   }, [activeWorkspaceId]);
 
   // Auto-select active note if navigated from notes page
@@ -65,6 +67,7 @@ export const FlashcardsPage: React.FC = () => {
   // Load flashcards for selected source using the new unified backend route
   const fetchFlashcards = async (sourceType: SourceType, sourceId: string) => {
     setCardsLoading(true);
+    setCardsError(null);
     try {
       const response = await apiClient.get(`/knowledge/${sourceType}/${sourceId}/flashcards`);
       setFlashcards(response.data);
@@ -72,6 +75,7 @@ export const FlashcardsPage: React.FC = () => {
       setIsFlipped(false);
     } catch (err) {
       console.error("Error loading flashcards:", err);
+      setCardsError("Failed to load flashcards. Please check connection and try again.");
     } finally {
       setCardsLoading(false);
     }
@@ -196,9 +200,34 @@ export const FlashcardsPage: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-grow flex items-center justify-center clay-panel h-full"
+              className="flex-grow flex items-center justify-center p-8 clay-panel h-full"
             >
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <div className="w-full max-w-md h-64 rounded-2xl border border-white/[0.03] bg-white/[0.01] p-6 flex flex-col justify-between animate-pulse">
+                <div className="space-y-3">
+                  <div className="h-4.5 w-1/3 rounded bg-white/[0.04]" />
+                  <div className="h-3.5 w-full rounded bg-white/[0.02]" />
+                  <div className="h-3.5 w-5/6 rounded bg-white/[0.02]" />
+                </div>
+                <div className="flex justify-center gap-4">
+                  <div className="h-8 w-24 rounded-lg bg-white/[0.03]" />
+                </div>
+              </div>
+            </motion.div>
+          ) : cardsError ? (
+            <motion.div
+              key="error-cards"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-grow flex flex-col items-center justify-center text-center p-8 space-y-3 clay-panel h-full"
+            >
+              <p className="text-xs text-red-400 font-semibold">{cardsError}</p>
+              <button
+                onClick={() => fetchFlashcards(selectedSourceType!, selectedSourceId!)}
+                className="px-4 py-2 rounded-lg border border-white/[0.08] hover:bg-white/[0.02] text-xs font-bold text-foreground transition-all duration-150"
+              >
+                Try Again
+              </button>
             </motion.div>
           ) : flashcards.length === 0 ? (
             <motion.div

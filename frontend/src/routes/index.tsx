@@ -12,19 +12,20 @@ import { ForgotPassword } from "@/pages/auth/ForgotPassword";
 import { ResetPassword } from "@/pages/auth/ResetPassword";
 import { NotFound } from "@/pages/NotFound";
 
-// Child views of the Dashboard panel layout
-import { DashboardOverview } from "@/pages/dashboard/DashboardOverview";
-import { NotesPage } from "@/pages/dashboard/NotesPage";
-import { FoldersPage } from "@/pages/dashboard/FoldersPage";
-import { FavoritesPage } from "@/pages/dashboard/FavoritesPage";
-import { TagsPage } from "@/pages/dashboard/TagsPage";
-import { NotebookLMChat } from "@/pages/dashboard/NotebookLMChat";
-import { DocumentsPage } from "@/pages/dashboard/DocumentsPage";
-import { FlashcardsPage } from "@/pages/dashboard/FlashcardsPage";
-import { QuizzesPage } from "@/pages/dashboard/QuizzesPage";
-import { AnalyticsPage } from "@/pages/dashboard/AnalyticsPage";
-import { EvaluationDashboardV2 } from "@/pages/dashboard/EvaluationDashboardV2";
-import { SettingsPage } from "@/pages/dashboard/SettingsPage";
+// Child views of the Dashboard panel layout (lazy-loaded for premium bundle footprint efficiency)
+const DashboardOverview = React.lazy(() => import("@/pages/dashboard/DashboardOverview").then(m => ({ default: m.DashboardOverview })));
+const NotesPage = React.lazy(() => import("@/pages/dashboard/NotesPage").then(m => ({ default: m.NotesPage })));
+const FoldersPage = React.lazy(() => import("@/pages/dashboard/FoldersPage").then(m => ({ default: m.FoldersPage })));
+const FavoritesPage = React.lazy(() => import("@/pages/dashboard/FavoritesPage").then(m => ({ default: m.FavoritesPage })));
+const TagsPage = React.lazy(() => import("@/pages/dashboard/TagsPage").then(m => ({ default: m.TagsPage })));
+const NotebookLMChat = React.lazy(() => import("@/pages/dashboard/NotebookLMChat").then(m => ({ default: m.NotebookLMChat })));
+const DocumentsPage = React.lazy(() => import("@/pages/dashboard/DocumentsPage").then(m => ({ default: m.DocumentsPage })));
+const FlashcardsPage = React.lazy(() => import("@/pages/dashboard/FlashcardsPage").then(m => ({ default: m.FlashcardsPage })));
+const QuizzesPage = React.lazy(() => import("@/pages/dashboard/QuizzesPage").then(m => ({ default: m.QuizzesPage })));
+const AnalyticsPage = React.lazy(() => import("@/pages/dashboard/AnalyticsPage").then(m => ({ default: m.AnalyticsPage })));
+const EvaluationDashboardV2 = React.lazy(() => import("@/pages/dashboard/EvaluationDashboardV2").then(m => ({ default: m.EvaluationDashboardV2 })));
+const SettingsPage = React.lazy(() => import("@/pages/dashboard/SettingsPage").then(m => ({ default: m.SettingsPage })));
+
 
 export const AppRoutes: React.FC = () => {
   const basename = import.meta.env.VITE_BASE_PATH || "/";

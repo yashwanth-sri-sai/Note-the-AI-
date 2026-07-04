@@ -27,7 +27,7 @@ export const NotesPage: React.FC = () => {
   } = useUIStore();
 
   // Fetch lists
-  const { data: notes, isLoading: notesLoading } = useNotes({
+  const { data: notes, isLoading: notesLoading, isError: notesError, refetch: refetchNotes } = useNotes({
     folderId: activeFolderId,
     tagId: activeTagId
   });
@@ -620,8 +620,23 @@ export const NotesPage: React.FC = () => {
           {/* Note list body */}
           <div className="flex-grow overflow-y-auto divide-y divide-border/20 p-2 space-y-1.5 scrollbar">
             {notesLoading ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <div className="space-y-2 p-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="p-4 rounded-2xl border border-white/[0.03] bg-white/[0.01] space-y-2 animate-pulse">
+                    <div className="h-3.5 w-3/4 rounded bg-white/[0.04]" />
+                    <div className="h-2.5 w-1/2 rounded bg-white/[0.02]" />
+                  </div>
+                ))}
+              </div>
+            ) : notesError ? (
+              <div className="text-center py-10 px-4 space-y-3">
+                <p className="text-xs text-red-400 font-semibold">Failed to load notes</p>
+                <button
+                  onClick={() => refetchNotes()}
+                  className="px-3.5 py-1.5 rounded-lg border border-white/[0.08] hover:bg-white/[0.02] text-[10px] font-bold text-foreground transition-all duration-150"
+                >
+                  Try Again
+                </button>
               </div>
             ) : filteredNotes.length === 0 ? (
               <div className="text-center py-10 text-xs text-muted-foreground p-4">
