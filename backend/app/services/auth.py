@@ -1,8 +1,14 @@
+import asyncio
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 from uuid import UUID
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# Module-level single-flight caches for token refresh concurrency control
+recent_rotations = {}
+token_locks = {}
 from app.core.config import settings
 from app.core.exceptions import BadRequestException, UnauthorizedException
 from app.core.security import (
@@ -67,27 +73,54 @@ class AuthService:
 
     async def refresh_access_token(self, refresh_token: str) -> Tuple[str, str]:
         """Issue a new access token and a new refresh token (rotation)."""
-        db_token = await self.token_repo.get_by_token(refresh_token)
+        now = time.time()
+        # Return same tokens if refresh was processed within the last 5 seconds (prevent rotation race)
+        if refresh_token in recent_rotations:
+            access_token, new_refresh_token, ts = recent_rotations[refresh_token]
+            if now - ts < 5.0:
+                return access_token, new_refresh_token
 
-        if not db_token or db_token.is_revoked:
-            raise UnauthorizedException(detail="Invalid or revoked refresh token")
+        # Get or create lock for this specific token to serialize requests
+        lock = token_locks.setdefault(refresh_token, asyncio.Lock())
+        async with lock:
+            # Double check cache inside the lock
+            now = time.time()
+            if refresh_token in recent_rotations:
+                access_token, new_refresh_token, ts = recent_rotations[refresh_token]
+                if now - ts < 5.0:
+                    return access_token, new_refresh_token
 
-        # Make sure expires_at is timezone-aware for comparison
-        expires_at = db_token.expires_at
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            # Perform database-backed token rotation
+            db_token = await self.token_repo.get_by_token(refresh_token)
 
-        if expires_at < datetime.now(timezone.utc):
-            raise UnauthorizedException(detail="Expired refresh token")
+            if not db_token or db_token.is_revoked:
+                raise UnauthorizedException(detail="Invalid or revoked refresh token")
 
-        # Revoke the old refresh token
-        await self.token_repo.revoke_token(refresh_token)
+            # Make sure expires_at is timezone-aware for comparison
+            expires_at = db_token.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
 
-        # Generate new tokens
-        access_token = create_access_token(subject=db_token.user_id)
-        new_refresh_token = await self.create_user_refresh_token(db_token.user_id)
-        
-        return access_token, new_refresh_token
+            if expires_at < datetime.now(timezone.utc):
+                raise UnauthorizedException(detail="Expired refresh token")
+
+            # Revoke the old refresh token
+            await self.token_repo.revoke_token(refresh_token)
+
+            # Generate new tokens
+            access_token = create_access_token(subject=db_token.user_id)
+            new_refresh_token = await self.create_user_refresh_token(db_token.user_id)
+
+            # Cache the result for 5 seconds
+            recent_rotations[refresh_token] = (access_token, new_refresh_token, time.time())
+
+            # Cleanup expired cache entries
+            expired_keys = [k for k, (_, _, ts) in recent_rotations.items() if time.time() - ts > 10.0]
+            for k in expired_keys:
+                recent_rotations.pop(k, None)
+                token_locks.pop(k, None)
+
+            return access_token, new_refresh_token
 
     async def revoke_token(self, refresh_token: str) -> None:
         """Revoke a refresh token."""

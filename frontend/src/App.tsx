@@ -18,7 +18,7 @@ const queryClient = new QueryClient({
 
 function App() {
   const initAuth = useAuthStore((state) => state.initAuth);
-  const isLoading = useAuthStore((state) => state.isLoading);
+  const authReady = useAuthStore((state) => state.authReady);
 
   // Initialize session verification on boot
   useEffect(() => {
@@ -41,7 +41,7 @@ function App() {
     };
   }, []);
 
-  if (isLoading) {
+  if (!authReady) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">

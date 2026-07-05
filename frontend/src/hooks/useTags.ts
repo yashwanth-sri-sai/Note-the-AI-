@@ -1,14 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { Tag } from "@/types";
+import { useAuthStore } from "@/store/auth-store";
 
 export const useTags = () => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return useQuery<Tag[]>({
     queryKey: ["tags"],
     queryFn: async () => {
       const response = await apiClient.get("/tags/");
       return response.data;
     },
+    enabled: isAuthenticated,
   });
 };
 

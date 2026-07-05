@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
+import { useAuthStore } from "@/store/auth-store";
 
 export interface DocumentItem {
   id: string;
@@ -11,6 +12,7 @@ export interface DocumentItem {
 }
 
 export const useDocuments = () => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return useQuery<DocumentItem[]>({
     queryKey: ["documents"],
     queryFn: async () => {
@@ -25,6 +27,7 @@ export const useDocuments = () => {
       }
       return false;
     },
+    enabled: isAuthenticated,
   });
 };
 

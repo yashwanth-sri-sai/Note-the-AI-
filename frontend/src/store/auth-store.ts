@@ -6,6 +6,7 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  authReady: boolean;
 
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
@@ -16,10 +17,13 @@ interface AuthState {
   initAuth: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+let isInitializing = false;
+
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true, // Start with loading active until verified
+  authReady: false,
 
   login: async (email, password) => {
     set({ isLoading: true });
@@ -48,8 +52,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
     try {
       await apiClient.post("/auth/register", { email, password, name });
-      // Log in automatically after registration
-      await get().login(email, password);
+      set({ isLoading: false });
     } catch (error) {
       set({ isLoading: false });
       throw error;
@@ -83,15 +86,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
     try {
       await apiClient.post("/auth/logout");
-    } catch (err) {
-      console.error("Logout request failed:", err);
+    } catch (error) {
+      console.error("Logout request failed:", error);
     } finally {
       setAccessToken(null);
-      set({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
+      set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },
 
@@ -117,6 +116,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   initAuth: async () => {
+    const ready = useAuthStore.getState().authReady;
+    if (isInitializing || ready) {
+      return;
+    }
+    isInitializing = true;
+
     try {
       const userResponse = await apiClient.get("/users/me");
       set({
@@ -130,6 +135,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch (err) {
       setAccessToken(null);
       set({ user: null, isAuthenticated: false, isLoading: false });
+    } finally {
+      isInitializing = false;
+      set({ authReady: true });
     }
   },
 }));

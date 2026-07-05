@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { Note } from "@/types";
+import { useAuthStore } from "@/store/auth-store";
 
 interface NotesFilters {
   folderId?: string | null;
@@ -9,6 +10,7 @@ interface NotesFilters {
 }
 
 export const useNotes = (filters: NotesFilters = {}) => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return useQuery<Note[]>({
     queryKey: ["notes", filters],
     queryFn: async () => {
@@ -22,10 +24,12 @@ export const useNotes = (filters: NotesFilters = {}) => {
       const response = await apiClient.get("/notes/", { params });
       return response.data;
     },
+    enabled: isAuthenticated,
   });
 };
 
 export const useNote = (id: string | null) => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return useQuery<Note>({
     queryKey: ["notes", id],
     queryFn: async () => {
@@ -33,7 +37,7 @@ export const useNote = (id: string | null) => {
       const response = await apiClient.get(`/notes/${id}`);
       return response.data;
     },
-    enabled: !!id,
+    enabled: isAuthenticated && !!id,
   });
 };
 

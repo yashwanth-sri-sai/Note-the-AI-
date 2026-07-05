@@ -35,7 +35,35 @@ export const getAccessToken = () => accessToken;
 
 // Add access token and workspace ID to requests automatically
 apiClient.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    const url = config.url || "";
+    const isAuthRoute =
+      url.endsWith("/auth/refresh") ||
+      url.endsWith("/auth/login") ||
+      url.endsWith("/auth/register") ||
+      url.endsWith("/users/me");
+
+    // Request Gating: If auth is initializing, queue the request until complete
+    if (!isAuthRoute) {
+      try {
+        const { useAuthStore } = await import("@/store/auth-store");
+        const store = useAuthStore.getState();
+        if (store.isLoading) {
+          console.log("[api-client] Gating request during auth initialization:", url);
+          await new Promise<void>((resolve) => {
+            const unsubscribe = useAuthStore.subscribe((state) => {
+              if (!state.isLoading) {
+                unsubscribe();
+                resolve();
+              }
+            });
+          });
+        }
+      } catch (err) {
+        console.error("Failed to check auth state during request gating:", err);
+      }
+    }
+
     if (accessToken && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
@@ -45,26 +73,14 @@ apiClient.interceptors.request.use(
       config.headers["X-Workspace-ID"] = activeWorkspaceId;
     }
     
-    console.log("===== REQUEST INTERCEPTOR =====");
-    console.log("URL:", config.url);
-    console.log("Method:", config.method);
-    console.log("Headers:", config.headers);
-    console.log("Data constructor:", config.data?.constructor?.name);
-    console.log("Is FormData:", config.data instanceof FormData);
-    console.log("Raw data:", config.data);
-    if (config.data instanceof FormData) {
-        for (const pair of (config.data as any).entries()) {
-            console.log(pair[0], pair[1]);
-        }
-    }
-    console.log("==============================");
-    
     return config;
   },
   (error) => {
     return Promise.reject(error);
   }
 );
+
+let refreshPromise: Promise<string | null> | null = null;
 
 // Auto-refresh access token on 401 Unauthorized responses
 apiClient.interceptors.response.use(
@@ -86,25 +102,38 @@ apiClient.interceptors.response.use(
       originalRequest.url !== "/auth/login" &&
       originalRequest.url !== "/auth/register"
     ) {
-      console.log("[api-client] Attempting token refresh...");
       originalRequest._retry = true;
-      try {
-        const response = await apiClient.post("/auth/refresh");
-        const token = response.data.access_token;
-        console.log("[api-client] Token refresh succeeded, new token:", token);
 
-        setAccessToken(token);
-
-        // Retry the original request with new token
-        originalRequest.headers.Authorization = `Bearer ${token}`;
-        return apiClient(originalRequest);
-      } catch (refreshError: any) {
-        console.log("[api-client] Token refresh failed:", refreshError.response?.status || refreshError.message);
-        setAccessToken(null);
-        // Trigger a custom event to notify listeners (like AuthContext) that user is logged out
-        window.dispatchEvent(new Event("auth-logout"));
-        return Promise.reject(refreshError);
+      if (!refreshPromise) {
+        console.log("[api-client] Token refresh initiated...");
+        refreshPromise = apiClient
+          .post("/auth/refresh")
+          .then((response) => {
+            const token = response.data.access_token;
+            console.log("[api-client] Token refresh succeeded, new token:", token);
+            setAccessToken(token);
+            refreshPromise = null;
+            return token;
+          })
+          .catch((refreshError) => {
+            console.log("[api-client] Token refresh failed:", refreshError.response?.status || refreshError.message);
+            setAccessToken(null);
+            window.dispatchEvent(new Event("auth-logout"));
+            refreshPromise = null;
+            throw refreshError;
+          });
+      } else {
+        console.log("[api-client] Token refresh already in progress, awaiting existing promise...");
       }
+
+      return refreshPromise
+        .then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return apiClient(originalRequest);
+        })
+        .catch((err) => {
+          return Promise.reject(err);
+        });
     }
     return Promise.reject(error);
   }

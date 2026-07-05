@@ -5,9 +5,9 @@ import { useAuthStore } from "@/store/auth-store";
 export const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { isAuthenticated, isLoading } = useAuthStore();
+  const { isAuthenticated, authReady } = useAuthStore();
 
-  if (isLoading) {
+  if (!authReady) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">

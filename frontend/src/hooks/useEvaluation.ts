@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
-import { useAuthStore } from "@/store/auth-store";
+import { useWorkspaceStore } from "@/store/workspace-store";
 
 export interface TrendPoint {
   timestamp: string;
@@ -32,56 +32,56 @@ export interface QuestionEvaluation {
 }
 
 export const useEvaluationQuality = () => {
-  const { currentWorkspace } = useAuthStore();
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   return useQuery({
-    queryKey: ["evaluation", "quality", currentWorkspace?.id],
+    queryKey: ["evaluation", "quality", activeWorkspaceId],
     queryFn: async () => {
       const res = await apiClient.get("/evaluation/latest/quality");
       return res.data;
     },
-    enabled: !!currentWorkspace?.id,
+    enabled: !!activeWorkspaceId,
   });
 };
 
 export const useEvaluationLatest = () => {
-  const { currentWorkspace } = useAuthStore();
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   return useQuery({
-    queryKey: ["evaluation", "latest", currentWorkspace?.id],
+    queryKey: ["evaluation", "latest", activeWorkspaceId],
     queryFn: async () => {
       const res = await apiClient.get("/evaluation/latest");
       return res.data;
     },
-    enabled: !!currentWorkspace?.id,
+    enabled: !!activeWorkspaceId,
   });
 };
 
 export const useEvaluationTrends = (mode?: string) => {
-  const { currentWorkspace } = useAuthStore();
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   return useQuery({
-    queryKey: ["evaluation", "trends", currentWorkspace?.id, mode],
+    queryKey: ["evaluation", "trends", activeWorkspaceId, mode],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (mode) params.append("mode", mode);
-      if (currentWorkspace?.id) params.append("workspace_id", currentWorkspace.id);
+      if (activeWorkspaceId) params.append("workspace_id", activeWorkspaceId);
       const res = await apiClient.get(`/evaluation/trends?${params.toString()}`);
       return res.data;
     },
-    enabled: !!currentWorkspace?.id,
+    enabled: !!activeWorkspaceId,
   });
 };
 
 export const useEvaluationFailures = (mode?: string) => {
-  const { currentWorkspace } = useAuthStore();
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   return useQuery({
-    queryKey: ["evaluation", "failures", currentWorkspace?.id, mode],
+    queryKey: ["evaluation", "failures", activeWorkspaceId, mode],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (mode) params.append("mode", mode);
-      if (currentWorkspace?.id) params.append("workspace_id", currentWorkspace.id);
+      if (activeWorkspaceId) params.append("workspace_id", activeWorkspaceId);
       const res = await apiClient.get(`/evaluation/failures?${params.toString()}`);
       return res.data;
     },
-    enabled: !!currentWorkspace?.id,
+    enabled: !!activeWorkspaceId,
   });
 };
 
@@ -91,9 +91,9 @@ export const useEvaluationQuestions = (
   failureType?: string,
   mode?: string
 ) => {
-  const { currentWorkspace } = useAuthStore();
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   return useQuery({
-    queryKey: ["evaluation", "questions", currentWorkspace?.id, page, size, failureType, mode],
+    queryKey: ["evaluation", "questions", activeWorkspaceId, page, size, failureType, mode],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -101,11 +101,11 @@ export const useEvaluationQuestions = (
       });
       if (mode) params.append("mode", mode);
       if (failureType) params.append("failure_type", failureType);
-      if (currentWorkspace?.id) params.append("workspace_id", currentWorkspace.id);
+      if (activeWorkspaceId) params.append("workspace_id", activeWorkspaceId);
       
       const res = await apiClient.get(`/evaluation/questions?${params.toString()}`);
       return res.data;
     },
-    enabled: !!currentWorkspace?.id,
+    enabled: !!activeWorkspaceId,
   });
 };

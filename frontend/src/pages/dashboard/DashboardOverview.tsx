@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { useNotes, useCreateNote } from "@/hooks/useNotes";
 import { useFolders } from "@/hooks/useFolders";
 import { useTags } from "@/hooks/useTags";
+import { useDocuments } from "@/hooks/useDocuments";
 import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
-import { useWorkspaceStore } from "@/store/workspace-store";
-import { apiClient } from "@/lib/api-client";
 import { BookOpen, Folder, Star, Clock, Plus, ArrowRight, FileText, Upload, Sparkles, Search } from "lucide-react";
 import { motion } from "framer-motion";
 import { getNotePreview } from "@/lib/utils";
@@ -13,30 +12,9 @@ import { getNotePreview } from "@/lib/utils";
 export const DashboardOverview: React.FC = () => {
   const { user } = useAuthStore();
   const { setActiveTab, setActiveNoteId, setActiveFolderId } = useUIStore();
-  const { activeWorkspaceId } = useWorkspaceStore();
-
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [documentsLoading, setDocumentsLoading] = useState(false);
-
-  const fetchDocuments = async () => {
-    setDocumentsLoading(true);
-    try {
-      const response = await apiClient.get("/documents/");
-      setDocuments(response.data);
-    } catch (err) {
-      console.error("Error fetching documents:", err);
-    } finally {
-      setDocumentsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeWorkspaceId) {
-      fetchDocuments();
-    }
-  }, [activeWorkspaceId]);
 
   // Queries
+  const { data: documents = [], isLoading: documentsLoading } = useDocuments();
   const { data: notes, isLoading: notesLoading } = useNotes();
   const { data: folders, isLoading: foldersLoading } = useFolders();
   const { isLoading: tagsLoading } = useTags();

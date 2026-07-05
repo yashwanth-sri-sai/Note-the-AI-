@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useWorkspaceStore } from "@/store/workspace-store";
 import { 
   FileText, Upload, Trash2, Loader2, RefreshCw, CheckCircle2, 
   AlertCircle, Clock, FileDown, Plus, Info, Sparkles, X, ChevronRight, HelpCircle, ArrowRight
@@ -9,8 +8,7 @@ import { useUIStore } from "@/store/ui-store";
 import { useDocuments, useUploadDocument, useDeleteDocument, DocumentItem } from "@/hooks/useDocuments";
 
 export const DocumentsPage: React.FC = () => {
-  const { activeWorkspaceId } = useWorkspaceStore();
-  const { data: documents = [], isLoading } = useDocuments();
+  const { data: documents = [], isLoading, refetch } = useDocuments();
   const { mutateAsync: uploadDoc } = useUploadDocument();
   const { mutateAsync: deleteDoc } = useDeleteDocument();
 
@@ -219,7 +217,7 @@ export const DocumentsPage: React.FC = () => {
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => fetchDocuments(false)}
+          onClick={() => refetch()}
           className="p-2.5 text-muted-foreground hover:text-foreground clay-btn bg-card/45"
           title="Refresh List"
         >

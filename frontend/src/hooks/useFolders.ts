@@ -1,14 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { Folder } from "@/types";
+import { useAuthStore } from "@/store/auth-store";
 
 export const useFolders = () => {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return useQuery<Folder[]>({
     queryKey: ["folders"],
     queryFn: async () => {
       const response = await apiClient.get("/folders/");
       return response.data;
     },
+    enabled: isAuthenticated,
   });
 };
 

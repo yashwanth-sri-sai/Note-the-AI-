@@ -7,6 +7,7 @@ import { useNotes, useCreateNote } from "@/hooks/useNotes";
 import { apiClient } from "@/lib/api-client";
 import { useFolders } from "@/hooks/useFolders";
 import { useTags } from "@/hooks/useTags";
+import { useDocuments } from "@/hooks/useDocuments";
 import {
   BrainCircuit, LayoutDashboard, FileText, Folder, Tag, Star, Settings, LogOut,
   Menu, Bell, Search, X, ChevronDown, Sun, Moon, Files, Layers, GraduationCap, BarChart3,
@@ -119,7 +120,7 @@ export const DashboardV2: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const [documents, setDocuments] = useState<any[]>([]);
+  const { data: documents = [] } = useDocuments();
   const [conversations, setConversations] = useState<any[]>([]);
   const { mutateAsync: createNote } = useCreateNote();
 
@@ -143,11 +144,7 @@ export const DashboardV2: React.FC = () => {
     if (!showSearchModal) return;
     const fetchSearchData = async () => {
       try {
-        const [docsRes, chatRes] = await Promise.all([
-          apiClient.get("/documents"),
-          apiClient.get("/chat/conversations"),
-        ]);
-        setDocuments(docsRes.data);
+        const chatRes = await apiClient.get("/chat/conversations");
         setConversations(chatRes.data);
       } catch (err) {
         console.error("Failed to load search data:", err);

@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { KnowledgeSource } from "@/types";
+import { useAuthStore } from "@/store/auth-store";
 
 export const useKnowledgeSources = (options: { includeProcessing?: boolean } = {}) => {
   const includeProcessing = options.includeProcessing ?? true;
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   
   return useQuery<KnowledgeSource[]>({
     queryKey: ["knowledgeSources", { includeProcessing }],
@@ -28,5 +30,6 @@ export const useKnowledgeSources = (options: { includeProcessing?: boolean } = {
       }
       return false;
     },
+    enabled: isAuthenticated,
   });
 };
