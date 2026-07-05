@@ -37,13 +37,14 @@ export const useAuthStore = create<AuthState>((set) => ({
         user: userResponse.data,
         isAuthenticated: true,
         isLoading: false,
+        authReady: true,
       });
       // Preload critical dashboard routes in the background
       import("@/pages/dashboard/DashboardOverview");
       import("@/pages/dashboard/NotesPage");
     } catch (error) {
       setAccessToken(null);
-      set({ user: null, isAuthenticated: false, isLoading: false });
+      set({ user: null, isAuthenticated: false, isLoading: false, authReady: true });
       throw error;
     }
   },
@@ -71,13 +72,14 @@ export const useAuthStore = create<AuthState>((set) => ({
         user: userResponse.data,
         isAuthenticated: true,
         isLoading: false,
+        authReady: true,
       });
       // Preload critical dashboard routes in the background
       import("@/pages/dashboard/DashboardOverview");
       import("@/pages/dashboard/NotesPage");
     } catch (error) {
       setAccessToken(null);
-      set({ user: null, isAuthenticated: false, isLoading: false });
+      set({ user: null, isAuthenticated: false, isLoading: false, authReady: true });
       throw error;
     }
   },

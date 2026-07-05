@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Module-level single-flight caches for token refresh concurrency control
 recent_rotations = {}
 token_locks = {}
+refresh_token_timestamps = {}
 from app.core.config import settings
 from app.core.exceptions import BadRequestException, UnauthorizedException
 from app.core.security import (
@@ -72,31 +73,46 @@ class AuthService:
         return token
 
     async def refresh_access_token(self, refresh_token: str) -> Tuple[str, str]:
-        """Issue a new access token and a new refresh token (rotation)."""
+        """Issue a new access token and a new refresh token (rotation).
+
+        Guarantees:
+        - Per-token rate limit: max 5 calls per 10-second window (prevents refresh floods).
+        - Idempotency: identical result returned for the same token within 10 seconds
+          (prevents concurrent DB writes / rotation race conditions).
+        - Single-flight lock: only one DB round-trip per token at a time.
+        """
         now = time.time()
-        # Return same tokens if refresh was processed within the last 5 seconds (prevent rotation race)
+
+        # ── Per-token rate limit (sliding window, 5 calls per 10 s) ──────────
+        timestamps = refresh_token_timestamps.setdefault(refresh_token, [])
+        timestamps[:] = [t for t in timestamps if now - t < 10.0]
+        if len(timestamps) >= 5:
+            raise UnauthorizedException(detail="Too many refresh attempts. Please wait before retrying.")
+        timestamps.append(now)
+
+        # ── Idempotency fast-path (10 s window) ──────────────────────────────
         if refresh_token in recent_rotations:
             access_token, new_refresh_token, ts = recent_rotations[refresh_token]
-            if now - ts < 5.0:
+            if now - ts < 10.0:
                 return access_token, new_refresh_token
 
-        # Get or create lock for this specific token to serialize requests
+        # ── Single-flight lock: serialize concurrent requests per token ───────
         lock = token_locks.setdefault(refresh_token, asyncio.Lock())
         async with lock:
-            # Double check cache inside the lock
+            # Double-check cache inside the lock (another waiter may have populated it)
             now = time.time()
             if refresh_token in recent_rotations:
                 access_token, new_refresh_token, ts = recent_rotations[refresh_token]
-                if now - ts < 5.0:
+                if now - ts < 10.0:
                     return access_token, new_refresh_token
 
-            # Perform database-backed token rotation
+            # ── Database-backed token rotation ────────────────────────────────
             db_token = await self.token_repo.get_by_token(refresh_token)
 
             if not db_token or db_token.is_revoked:
                 raise UnauthorizedException(detail="Invalid or revoked refresh token")
 
-            # Make sure expires_at is timezone-aware for comparison
+            # Ensure expires_at is timezone-aware for comparison
             expires_at = db_token.expires_at
             if expires_at.tzinfo is None:
                 expires_at = expires_at.replace(tzinfo=timezone.utc)
@@ -104,21 +120,21 @@ class AuthService:
             if expires_at < datetime.now(timezone.utc):
                 raise UnauthorizedException(detail="Expired refresh token")
 
-            # Revoke the old refresh token
+            # Revoke the old token, generate fresh pair
             await self.token_repo.revoke_token(refresh_token)
-
-            # Generate new tokens
             access_token = create_access_token(subject=db_token.user_id)
             new_refresh_token = await self.create_user_refresh_token(db_token.user_id)
 
-            # Cache the result for 5 seconds
+            # Cache the result for the 10 s idempotency window
             recent_rotations[refresh_token] = (access_token, new_refresh_token, time.time())
 
-            # Cleanup expired cache entries
-            expired_keys = [k for k, (_, _, ts) in recent_rotations.items() if time.time() - ts > 10.0]
+            # ── Cleanup all expired entries to prevent memory leaks ───────────
+            cutoff = time.time() - 30.0
+            expired_keys = [k for k, (_, _, ts) in recent_rotations.items() if ts < cutoff]
             for k in expired_keys:
                 recent_rotations.pop(k, None)
                 token_locks.pop(k, None)
+                refresh_token_timestamps.pop(k, None)
 
             return access_token, new_refresh_token
 

@@ -8,15 +8,7 @@ export const apiClient = axios.create({
   withCredentials: true, // Send cookies (for refresh token HttpOnly cookies)
 });
 
-apiClient.interceptors.request.use(config => {
 
-    if (config.data instanceof FormData) {
-        for (const pair of (config.data as any).entries()) {
-            console.log(pair[0], pair[1]);
-        }
-    }
-    return config;
-});
 
 let accessToken: string | null = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
@@ -43,16 +35,17 @@ apiClient.interceptors.request.use(
       url.endsWith("/auth/register") ||
       url.endsWith("/users/me");
 
-    // Request Gating: If auth is initializing, queue the request until complete
+    // Request Gating: hold non-auth requests until initAuth() has fully settled.
+    // We gate on `authReady` (set once, never unset) — not `isLoading` which
+    // toggles during login/logout and would block legitimate post-login calls.
     if (!isAuthRoute) {
       try {
         const { useAuthStore } = await import("@/store/auth-store");
         const store = useAuthStore.getState();
-        if (store.isLoading) {
-          console.log("[api-client] Gating request during auth initialization:", url);
+        if (!store.authReady) {
           await new Promise<void>((resolve) => {
             const unsubscribe = useAuthStore.subscribe((state) => {
-              if (!state.isLoading) {
+              if (state.authReady) {
                 unsubscribe();
                 resolve();
               }
@@ -60,7 +53,7 @@ apiClient.interceptors.request.use(
           });
         }
       } catch (err) {
-        console.error("Failed to check auth state during request gating:", err);
+        console.error("[api-client] Failed to gate request on authReady:", err);
       }
     }
 

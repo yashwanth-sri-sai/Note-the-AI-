@@ -13,8 +13,8 @@ engine = create_async_engine(
     echo=False,
     future=True,
     pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
+    pool_size=5,
+    max_overflow=5,
 )
 
 # Create sessionmaker for async database transactions
