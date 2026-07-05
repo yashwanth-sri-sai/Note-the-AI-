@@ -5,6 +5,7 @@ import { useNotes, useCreateNote } from "@/hooks/useNotes";
 import { apiClient } from "@/lib/api-client";
 import { useFolders } from "@/hooks/useFolders";
 import { useTags } from "@/hooks/useTags";
+import { useChatConversations } from "@/hooks/useChatConversations";
 import {
   BrainCircuit, LayoutDashboard, FileText, Folder, Tag, Star, Settings, LogOut,
   Menu, Bell, Search, X, ChevronDown, Sun, Moon, Files, Layers, GraduationCap, BarChart3,
@@ -79,7 +80,8 @@ export const Dashboard: React.FC = () => {
 
   // Local states for unified search palette
   const [documents, setDocuments] = useState<any[]>([]);
-  const [conversations, setConversations] = useState<any[]>([]);
+  // Conversations served from React Query cache via useChatConversations.
+  const { data: conversations = [] } = useChatConversations();
   const { mutateAsync: createNote } = useCreateNote();
 
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -101,9 +103,9 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (showSearchModal) {
       setSelectedIndex(0);
-      // Pre-fetch fresh source documents and chat history
+      // Documents fetched directly (legacy component without useDocuments hook).
       apiClient.get("/documents/").then((res) => setDocuments(res.data)).catch((err) => console.error(err));
-      apiClient.get("/chat/conversations").then((res) => setConversations(res.data)).catch((err) => console.error(err));
+      // Conversations are now served by useChatConversations — no manual fetch.
     }
   }, [showSearchModal]);
 

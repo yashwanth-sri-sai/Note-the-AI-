@@ -11,12 +11,9 @@ import { useUIStore } from "@/store/ui-store";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUploadDocument, useDeleteDocument } from "@/hooks/useDocuments";
 import { useKnowledgeSources } from "@/components/knowledge";
+import { useChatConversations, useCreateConversation } from "@/hooks/useChatConversations";
 
-interface ConversationItem {
-  id: string;
-  title: string;
-  created_at: string;
-}
+// ConversationItem type is re-exported from useChatConversations
 
 interface ChatReference {
   chunk_uuid: string;
@@ -55,11 +52,19 @@ interface MessageItem {
 export const NotebookLMChat: React.FC = () => {
   const { activeWorkspaceId } = useWorkspaceStore();
 
-  // Conversations & Messages States
-  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  // ── Conversations via React Query (replaces manual fetchConversations) ───────
+  // useChatConversations is workspace-scoped, gated on authReady, and has
+  // staleTime/refetchOnMount guards — no useEffect needed to load on mount.
+  const {
+    data: conversations = [],
+    isLoading: isConversationsLoading,
+  } = useChatConversations();
+  const { mutateAsync: createConversationMutation } = useCreateConversation();
+
+  // Messages are local — they are fetched imperatively per conversation click,
+  // which is intentional (avoid caching large message arrays globally).
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
-  const [isConversationsLoading, setIsConversationsLoading] = useState(false);
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
 
   // Knowledge Sources & Filters States
@@ -120,11 +125,11 @@ export const NotebookLMChat: React.FC = () => {
     }
   }, [pendingAIQuery]);
 
-  // Load everything on workspace switch
+  // Reset active conversation on workspace switch.
+  // fetchConversations() is no longer needed here — useChatConversations
+  // automatically re-queries when activeWorkspaceId changes (the key changes).
   useEffect(() => {
     if (activeWorkspaceId) {
-      fetchConversations();
-      // Reset current active conversation
       setActiveConversationId(null);
       setMessages([]);
     }
@@ -139,10 +144,21 @@ export const NotebookLMChat: React.FC = () => {
     }
   }, [activeConversationId]);
 
-  // Synchronize uploadProgress status with background document status
+  // Synchronize uploadProgress status with background document status.
+  // IMPORTANT: uploadProgress and uploadFile are intentionally read via refs
+  // and excluded from the dep array. Including them caused a self-referential
+  // loop: setUploadProgress() changed the value → re-triggered this effect →
+  // called setUploadProgress() again, indefinitely.
+  const uploadProgressRef = useRef(uploadProgress);
+  uploadProgressRef.current = uploadProgress;
+  const uploadFileRef = useRef(uploadFile);
+  uploadFileRef.current = uploadFile;
+
   useEffect(() => {
-    if (uploadProgress === "processing" && uploadFile) {
-      const activeDoc = documents.find((d) => d.title === uploadFile.name);
+    const progress = uploadProgressRef.current;
+    const file = uploadFileRef.current;
+    if (progress === "processing" && file) {
+      const activeDoc = documents.find((d) => d.title === file.name);
       if (activeDoc) {
         if (activeDoc.status === "completed") {
           setUploadProgress("completed");
@@ -160,20 +176,7 @@ export const NotebookLMChat: React.FC = () => {
         }
       }
     }
-  }, [documents, uploadProgress, uploadFile]);
-
-  // API Call: Get Conversations
-  const fetchConversations = async () => {
-    setIsConversationsLoading(true);
-    try {
-      const response = await apiClient.get("/chat/conversations");
-      setConversations(response.data);
-    } catch (error) {
-      console.error("Error fetching conversations:", error);
-    } finally {
-      setIsConversationsLoading(false);
-    }
-  };
+  }, [documents]); // Only re-run when the polled documents list changes
 
   // API Call: Get Messages
   const fetchMessages = async (convId: string) => {
@@ -190,13 +193,12 @@ export const NotebookLMChat: React.FC = () => {
 
 
 
-  // API Call: Create Conversation
+  // Create Conversation — delegates to the mutation which optimistically
+  // prepends the new item into the React Query cache (no list refetch).
   const handleCreateConversation = async () => {
     try {
       const title = `Chat - ${new Date().toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
-      const response = await apiClient.post("/chat/conversations", { title });
-      const newConv = response.data;
-      setConversations((prev) => [newConv, ...prev]);
+      const newConv = await createConversationMutation(title);
       setActiveConversationId(newConv.id);
     } catch (error) {
       alert("Failed to initialize conversation.");
@@ -250,9 +252,9 @@ export const NotebookLMChat: React.FC = () => {
     if (!convId) {
       try {
         const title = `Chat - ${finalQuery.slice(0, 20)}...`;
-        const response = await apiClient.post("/chat/conversations", { title });
-        const newConv = response.data;
-        setConversations((prev) => [newConv, ...prev]);
+        // createConversationMutation writes directly into the React Query cache
+        // (no setConversations local state needed — that state was removed).
+        const newConv = await createConversationMutation(title);
         convId = newConv.id;
         setActiveConversationId(newConv.id);
       } catch (error) {

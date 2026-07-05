@@ -4,10 +4,10 @@ import { PageSkeleton } from "@/components/layout/PageSkeleton";
 import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
 import { useNotes, useCreateNote } from "@/hooks/useNotes";
-import { apiClient } from "@/lib/api-client";
 import { useFolders } from "@/hooks/useFolders";
 import { useTags } from "@/hooks/useTags";
 import { useDocuments } from "@/hooks/useDocuments";
+import { useChatConversations } from "@/hooks/useChatConversations";
 import {
   BrainCircuit, LayoutDashboard, FileText, Folder, Tag, Star, Settings, LogOut,
   Menu, Bell, Search, X, ChevronDown, Sun, Moon, Files, Layers, GraduationCap, BarChart3,
@@ -121,7 +121,10 @@ export const DashboardV2: React.FC = () => {
   }, []);
 
   const { data: documents = [] } = useDocuments();
-  const [conversations, setConversations] = useState<any[]>([]);
+  // Replace raw apiClient.get + useState with React Query hook.
+  // Data is served from cache when the search modal opens — no extra network
+  // call within the 5-minute staleTime window.
+  const { data: conversations = [] } = useChatConversations();
   const { mutateAsync: createNote } = useCreateNote();
 
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -142,15 +145,8 @@ export const DashboardV2: React.FC = () => {
 
   useEffect(() => {
     if (!showSearchModal) return;
-    const fetchSearchData = async () => {
-      try {
-        const chatRes = await apiClient.get("/chat/conversations");
-        setConversations(chatRes.data);
-      } catch (err) {
-        console.error("Failed to load search data:", err);
-      }
-    };
-    fetchSearchData();
+    // No manual fetch needed — useChatConversations serves data from cache.
+    // The search modal opening is not a reason to bypass the 5-minute staleTime.
   }, [showSearchModal]);
 
   const searchNotes = useMemo(() => {
