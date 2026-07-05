@@ -4,6 +4,7 @@ import { Tag } from "@/types";
 import { useAuthStore } from "@/store/auth-store";
 
 export const useTags = () => {
+  const authReady = useAuthStore((state) => state.authReady);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return useQuery<Tag[]>({
     queryKey: ["tags"],
@@ -11,7 +12,7 @@ export const useTags = () => {
       const response = await apiClient.get("/tags/");
       return response.data;
     },
-    enabled: isAuthenticated,
+    enabled: authReady && isAuthenticated,
   });
 };
 

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { Note } from "@/types";
 import { useAuthStore } from "@/store/auth-store";
+import { useWorkspaceStore } from "@/store/workspace-store";
 
 interface NotesFilters {
   folderId?: string | null;
@@ -10,9 +11,27 @@ interface NotesFilters {
 }
 
 export const useNotes = (filters: NotesFilters = {}) => {
+  // Gate on authReady (set-once signal) rather than isAuthenticated.
+  // isAuthenticated briefly toggles false during the 401→refresh→retry cycle,
+  // which disabled and then re-enabled this query — causing a fresh network
+  // request every time a token refresh happened.
+  const authReady = useAuthStore((state) => state.authReady);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const { activeWorkspaceId } = useWorkspaceStore();
+
+  // Stable primitive key — spreading filter values prevents the query key
+  // from changing identity every render when the filters object is recreated
+  // inline (e.g. useNotes({}) on every component render).
+  const queryKey = [
+    "notes",
+    String(activeWorkspaceId),
+    filters.folderId ?? null,
+    filters.tagId ?? null,
+    filters.isFavorite ?? null,
+  ] as const;
+
   return useQuery<Note[]>({
-    queryKey: ["notes", filters],
+    queryKey,
     queryFn: async () => {
       const params: any = {};
       if (filters.folderId) params.folder_id = filters.folderId;
@@ -20,15 +39,15 @@ export const useNotes = (filters: NotesFilters = {}) => {
       if (filters.isFavorite !== undefined && filters.isFavorite !== null) {
         params.is_favorite = filters.isFavorite;
       }
-
       const response = await apiClient.get("/notes/", { params });
       return response.data;
     },
-    enabled: isAuthenticated,
+    enabled: authReady && isAuthenticated && !!activeWorkspaceId,
   });
 };
 
 export const useNote = (id: string | null) => {
+  const authReady = useAuthStore((state) => state.authReady);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return useQuery<Note>({
     queryKey: ["notes", id],
@@ -37,7 +56,7 @@ export const useNote = (id: string | null) => {
       const response = await apiClient.get(`/notes/${id}`);
       return response.data;
     },
-    enabled: isAuthenticated && !!id,
+    enabled: authReady && isAuthenticated && !!id,
   });
 };
 

@@ -8,9 +8,13 @@ export const apiClient = axios.create({
   withCredentials: true, // Send cookies (for refresh token HttpOnly cookies)
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Access token — module-level in-memory value (source of truth).
+// localStorage is read once on load as a warm-start optimisation only.
+// ─────────────────────────────────────────────────────────────────────────────
 
-
-let accessToken: string | null = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+let accessToken: string | null =
+  typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
 export const setAccessToken = (token: string | null) => {
   accessToken = token;
@@ -25,24 +29,36 @@ export const setAccessToken = (token: string | null) => {
 
 export const getAccessToken = () => accessToken;
 
-// Add access token and workspace ID to requests automatically
+// ─────────────────────────────────────────────────────────────────────────────
+// Request interceptor
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Auth routes that must never be gated or retried on 401.
+const AUTH_ROUTES = new Set([
+  "/auth/refresh",
+  "/auth/login",
+  "/auth/register",
+  "/users/me",
+]);
+
+const isAuthRoute = (url: string) =>
+  [...AUTH_ROUTES].some((route) => url.endsWith(route));
+
 apiClient.interceptors.request.use(
   async (config) => {
     const url = config.url || "";
-    const isAuthRoute =
-      url.endsWith("/auth/refresh") ||
-      url.endsWith("/auth/login") ||
-      url.endsWith("/auth/register") ||
-      url.endsWith("/users/me");
 
-    // Request Gating: hold non-auth requests until initAuth() has fully settled.
-    // We gate on `authReady` (set once, never unset) — not `isLoading` which
-    // toggles during login/logout and would block legitimate post-login calls.
-    if (!isAuthRoute) {
+    // ── Request Gating ───────────────────────────────────────────────────────
+    // Hold non-auth requests until initAuth() has fully settled (authReady).
+    // We gate on authReady (set-once, never reset) — NOT isLoading or
+    // isAuthenticated, which toggle during login/logout/refresh cycles and
+    // would block legitimate post-login calls or release the gate too early.
+    if (!isAuthRoute(url)) {
       try {
         const { useAuthStore } = await import("@/store/auth-store");
         const store = useAuthStore.getState();
         if (!store.authReady) {
+          // Await the first authReady=true transition.
           await new Promise<void>((resolve) => {
             const unsubscribe = useAuthStore.subscribe((state) => {
               if (state.authReady) {
@@ -57,77 +73,88 @@ apiClient.interceptors.request.use(
       }
     }
 
+    // Attach Bearer token if available and not already set.
     if (accessToken && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${accessToken}`;
     }
-    
+
+    // Attach active workspace ID header.
     const activeWorkspaceId = localStorage.getItem("active_workspace_id");
     if (activeWorkspaceId) {
       config.headers["X-Workspace-ID"] = activeWorkspaceId;
     }
-    
+
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  }
+  (error) => Promise.reject(error)
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Response interceptor — single-flight token refresh
+//
+// Design:
+// - ONE refreshPromise at a time (module-level singleton).
+// - ALL 401 responses share the same promise and wait for it to resolve.
+// - On success: every waiting request is retried with the new token.
+// - On failure: logout is dispatched ONCE; all waiting requests reject.
+// - Auth routes are excluded from the retry loop to prevent infinite cycles.
+// ─────────────────────────────────────────────────────────────────────────────
 
 let refreshPromise: Promise<string | null> | null = null;
 
-// Auto-refresh access token on 401 Unauthorized responses
+// Guard: prevent dispatching auth-logout more than once per failed refresh.
+let logoutDispatched = false;
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    console.log("[api-client] Intercepted error response:", {
-      url: originalRequest?.url,
-      status: error.response?.status,
-      _retry: originalRequest?._retry,
-    });
 
-    // Check if error is 401 and not already retried
-    if (
+    const shouldAttemptRefresh =
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      originalRequest.url !== "/auth/refresh" &&
-      originalRequest.url !== "/auth/login" &&
-      originalRequest.url !== "/auth/register"
-    ) {
-      originalRequest._retry = true;
+      !isAuthRoute(originalRequest.url ?? "");
 
-      if (!refreshPromise) {
-        console.log("[api-client] Token refresh initiated...");
-        refreshPromise = apiClient
-          .post("/auth/refresh")
-          .then((response) => {
-            const token = response.data.access_token;
-            console.log("[api-client] Token refresh succeeded, new token:", token);
-            setAccessToken(token);
-            refreshPromise = null;
-            return token;
-          })
-          .catch((refreshError) => {
-            console.log("[api-client] Token refresh failed:", refreshError.response?.status || refreshError.message);
-            setAccessToken(null);
-            window.dispatchEvent(new Event("auth-logout"));
-            refreshPromise = null;
-            throw refreshError;
-          });
-      } else {
-        console.log("[api-client] Token refresh already in progress, awaiting existing promise...");
-      }
+    if (!shouldAttemptRefresh) {
+      return Promise.reject(error);
+    }
 
-      return refreshPromise
-        .then((token) => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return apiClient(originalRequest);
+    // Mark this request as already retried so we never enter this block again
+    // for the same request object, preventing infinite retry loops.
+    originalRequest._retry = true;
+
+    // ── Single-flight guard ──────────────────────────────────────────────────
+    // If a refresh is already in flight, all callers share that same promise
+    // instead of firing duplicate POST /auth/refresh requests.
+    if (!refreshPromise) {
+      logoutDispatched = false; // Reset for this refresh cycle
+      refreshPromise = apiClient
+        .post("/auth/refresh")
+        .then((response) => {
+          const token = response.data.access_token;
+          setAccessToken(token);
+          refreshPromise = null;
+          return token;
         })
-        .catch((err) => {
-          return Promise.reject(err);
+        .catch((refreshError) => {
+          setAccessToken(null);
+          refreshPromise = null;
+          // Dispatch logout exactly once, even if many requests fail.
+          if (!logoutDispatched) {
+            logoutDispatched = true;
+            window.dispatchEvent(new Event("auth-logout"));
+          }
+          throw refreshError;
         });
     }
-    return Promise.reject(error);
+
+    // Wait for the single in-flight refresh (whether we started it or not).
+    return refreshPromise
+      .then((token) => {
+        originalRequest.headers.Authorization = `Bearer ${token}`;
+        return apiClient(originalRequest);
+      })
+      .catch((err) => Promise.reject(err));
   }
 );

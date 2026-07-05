@@ -4,6 +4,7 @@ import { Folder } from "@/types";
 import { useAuthStore } from "@/store/auth-store";
 
 export const useFolders = () => {
+  const authReady = useAuthStore((state) => state.authReady);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return useQuery<Folder[]>({
     queryKey: ["folders"],
@@ -11,7 +12,7 @@ export const useFolders = () => {
       const response = await apiClient.get("/folders/");
       return response.data;
     },
-    enabled: isAuthenticated,
+    enabled: authReady && isAuthenticated,
   });
 };
 
