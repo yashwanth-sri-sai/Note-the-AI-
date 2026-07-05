@@ -69,18 +69,9 @@ export const DashboardV2: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Sync Zustand state to URL path on change
-  useEffect(() => {
-    const pathParts = location.pathname.split("/");
-    const lastPart = pathParts[pathParts.length - 1];
-    if (activeTab && lastPart !== activeTab) {
-      if (location.pathname.startsWith("/dashboard")) {
-        navigate(`/dashboard/${activeTab}`, { replace: false });
-      }
-    }
-  }, [activeTab, navigate, location.pathname]);
+  const syncRef = useRef({ tab: activeTab, path: location.pathname });
 
-  // Sync URL path to Zustand activeTab on change
+  // Sync Zustand state and URL path in a unified loop-free manner
   useEffect(() => {
     const pathParts = location.pathname.split("/");
     const lastPart = pathParts[pathParts.length - 1];
@@ -100,14 +91,31 @@ export const DashboardV2: React.FC = () => {
       settings: "settings"
     };
 
-    if (tabMap[lastPart]) {
-      if (activeTab !== tabMap[lastPart]) {
-        setActiveTab(tabMap[lastPart] as any);
-      }
-    } else if (location.pathname === "/dashboard" || location.pathname === "/dashboard/") {
-      setActiveTab("overview");
+    let resolvedTab = tabMap[lastPart];
+    if (!resolvedTab && (location.pathname === "/dashboard" || location.pathname === "/dashboard/")) {
+      resolvedTab = "overview";
     }
-  }, [location.pathname, activeTab, setActiveTab]);
+
+    if (resolvedTab) {
+      // 1. If Zustand activeTab has changed, push the update to URL
+      if (activeTab !== syncRef.current.tab) {
+        syncRef.current.tab = activeTab;
+        if (resolvedTab !== activeTab && location.pathname.startsWith("/dashboard")) {
+          const newPath = `/dashboard/${activeTab}`;
+          syncRef.current.path = newPath;
+          navigate(newPath, { replace: false });
+        }
+      }
+      // 2. If URL path has changed, sync it back to Zustand activeTab
+      else if (location.pathname !== syncRef.current.path) {
+        syncRef.current.path = location.pathname;
+        if (activeTab !== resolvedTab) {
+          syncRef.current.tab = resolvedTab as any;
+          setActiveTab(resolvedTab as any);
+        }
+      }
+    }
+  }, [location.pathname, activeTab, navigate, setActiveTab]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
