@@ -22,10 +22,20 @@ export const DocumentsPage: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Synchronize uploadStatus with newly uploaded document processing success/failure
+  // Keep a ref so the effect can read the *current* uploadStatus without
+  // adding it to the dep array (adding it caused a self-referential loop:
+  // effect sets uploadStatus → re-runs → sets again, indefinitely).
+  const uploadStatusRef = React.useRef(uploadStatus);
+  uploadStatusRef.current = uploadStatus;
+
+  // React only when the documents list updates (driven by the polling interval
+  // inside useDocuments). Safe: uploadStatusRef.current is always fresh.
   useEffect(() => {
-    if (uploadStatus.status === "processing" && uploadStatus.progressFilename) {
-      const activeDoc = documents.find((d: DocumentItem) => d.filename === uploadStatus.progressFilename);
+    const current = uploadStatusRef.current;
+    if (current.status === "processing" && current.progressFilename) {
+      const activeDoc = documents.find(
+        (d: DocumentItem) => d.filename === current.progressFilename
+      );
       if (activeDoc) {
         if (activeDoc.status === "completed") {
           setUploadStatus({ status: "completed", message: "Document processed successfully!" });
@@ -36,7 +46,7 @@ export const DocumentsPage: React.FC = () => {
         }
       }
     }
-  }, [documents, uploadStatus]);
+  }, [documents]); // ← intentionally omits uploadStatus to break the loop
 
   const handleUploadFile = async (file: File) => {
     if (!file) return;
