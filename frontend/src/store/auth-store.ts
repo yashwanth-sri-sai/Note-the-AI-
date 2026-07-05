@@ -147,7 +147,24 @@ export const useAuthStore = create<AuthState>((set) => ({
 // Listen for token-refresh failure events to sign the user out automatically
 if (typeof window !== "undefined") {
   window.addEventListener("auth-logout", () => {
+    console.warn("[FORENSIC Event] auth-logout event received!");
+    console.trace("[FORENSIC Trace] auth-logout event dispatcher stack:");
     setAccessToken(null);
     useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: false });
+  });
+
+  let prevIsAuthenticated = useAuthStore.getState().isAuthenticated;
+  let prevAuthReady = useAuthStore.getState().authReady;
+  
+  useAuthStore.subscribe((state) => {
+    if (state.isAuthenticated !== prevIsAuthenticated || state.authReady !== prevAuthReady) {
+      console.log("[FORENSIC Event] useAuthStore state update:", {
+        isAuthenticated: { old: prevIsAuthenticated, new: state.isAuthenticated },
+        authReady: { old: prevAuthReady, new: state.authReady },
+      });
+      console.trace("[FORENSIC Trace] auth-store state update caller:");
+      prevIsAuthenticated = state.isAuthenticated;
+      prevAuthReady = state.authReady;
+    }
   });
 }

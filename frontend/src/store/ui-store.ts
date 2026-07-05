@@ -99,7 +99,9 @@ export const useUIStore = create<UIState>((set) => {
     setFocusMode: (focused) => set({ isFocusMode: focused }),
 
     setActiveTab: (tab) =>
-      set(() => {
+      set((state) => {
+        console.log("[FORENSIC Event] setActiveTab called.", { oldTab: state.activeTab, newTab: tab });
+        console.trace("[FORENSIC Trace] setActiveTab call stack:");
         // Clear active note or filter when switching tab to keep state clean, EXCEPT for tabs that reference active note
         const updates: Partial<UIState> = { activeTab: tab };
         if (tab !== "notes" && tab !== "flashcards" && tab !== "quizzes" && tab !== "chat") {

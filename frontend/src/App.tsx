@@ -27,6 +27,17 @@ const queryClient = new QueryClient({
   },
 });
 
+if (typeof window !== "undefined") {
+  queryClient.getQueryCache().subscribe((event) => {
+    console.log("[FORENSIC QueryCache Event]", {
+      type: event.type,
+      queryKey: event.query.queryKey,
+      state: event.query.state,
+      event,
+    });
+  });
+}
+
 function App() {
   const initAuth = useAuthStore((state) => state.initAuth);
   const authReady = useAuthStore((state) => state.authReady);
@@ -43,6 +54,8 @@ function App() {
   // triggered the refresh storm.
   useEffect(() => {
     const handleWorkspaceChanged = () => {
+      console.log("[FORENSIC Event] workspace-changed handler fired in App.tsx");
+      console.trace("[FORENSIC Trace] workspace-changed invalidate trace:");
       const uiStore = useUIStore.getState();
       uiStore.setActiveNoteId(null);
       uiStore.resetFilters();

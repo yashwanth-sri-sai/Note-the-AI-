@@ -1,3 +1,4 @@
+import React, { useEffect } from "react";
 import {
   useQuery,
   useMutation,
@@ -42,6 +43,13 @@ export const useChatConversations = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const { activeWorkspaceId } = useWorkspaceStore();
 
+  console.count("useChatConversations executed (hook render count)");
+
+  useEffect(() => {
+    console.log("[FORENSIC Mount] useChatConversations hook mounted");
+    return () => console.log("[FORENSIC Mount] useChatConversations hook unmounted");
+  }, []);
+
   return useQuery<ConversationItem[]>({
     // Workspace-scoped so switching workspaces isolates cache entries.
     // String() ensures the key is always a primitive even if the store
@@ -49,6 +57,7 @@ export const useChatConversations = () => {
     queryKey: chatKeys.list(String(activeWorkspaceId)),
 
     queryFn: async () => {
+      console.trace("[FORENSIC Trace] chat query executed (GET /chat/conversations)");
       const response = await apiClient.get("/chat/conversations");
       return response.data;
     },

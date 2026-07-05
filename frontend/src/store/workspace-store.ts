@@ -53,6 +53,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
     },
 
     setActiveWorkspaceId: (id) => {
+      const oldId = get().activeWorkspaceId;
+      console.log("[FORENSIC Event] setActiveWorkspaceId called.", { oldWorkspaceId: oldId, newWorkspaceId: id });
+      console.trace("[FORENSIC Trace] setActiveWorkspaceId call stack:");
+
       if (id) {
         localStorage.setItem("active_workspace_id", id);
       } else {
