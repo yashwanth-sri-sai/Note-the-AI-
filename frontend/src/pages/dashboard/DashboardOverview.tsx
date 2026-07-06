@@ -8,6 +8,7 @@ import { useUIStore } from "@/store/ui-store";
 import { BookOpen, Folder, Star, Clock, Plus, ArrowRight, FileText, Upload, Sparkles, Search } from "lucide-react";
 import { motion } from "framer-motion";
 import { getNotePreview } from "@/lib/utils";
+import { Loader } from "../../components/ui/Loader";
 
 export const DashboardOverview: React.FC = () => {
   const { user } = useAuthStore();
@@ -41,7 +42,7 @@ export const DashboardOverview: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <Loader size="md" />
       </div>
     );
   }

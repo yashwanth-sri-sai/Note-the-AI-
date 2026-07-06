@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useFolders, useCreateFolder, useDeleteFolder } from "@/hooks/useFolders";
 import { useUIStore } from "@/store/ui-store";
-import { Folder, FolderPlus, Trash2, ArrowRight, X, Loader2 } from "lucide-react";
+import { Folder, FolderPlus, Trash2, ArrowRight, X } from "lucide-react";
+import { Loader } from "../../components/ui/Loader";
 
 export const FoldersPage: React.FC = () => {
   const { data: folders, isLoading } = useFolders();
@@ -54,7 +55,7 @@ export const FoldersPage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <Loader size="md" />
       </div>
     );
   }
@@ -228,7 +229,7 @@ export const FoldersPage: React.FC = () => {
                   className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 hover:bg-primary/95 transition-all disabled:opacity-50"
                 >
                   {isSubmitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader size="sm" />
                   ) : null}
                   Create Folder
                 </button>

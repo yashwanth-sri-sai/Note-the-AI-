@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useTags, useCreateTag, useDeleteTag } from "@/hooks/useTags";
-import { Tag as TagIcon, Plus, Trash2, Loader2, X, AlertCircle } from "lucide-react";
+import { Tag as TagIcon, Plus, Trash2, X, AlertCircle } from "lucide-react";
+import { Loader } from "../../components/ui/Loader";
 import { useUIStore } from "@/store/ui-store";
 
 const PRESETS = [
@@ -64,7 +65,7 @@ export const TagsPage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <Loader size="md" />
       </div>
     );
   }
@@ -205,7 +206,7 @@ export const TagsPage: React.FC = () => {
                   className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 hover:bg-primary/95 transition-all disabled:opacity-50"
                 >
                   {isSubmitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader size="sm" />
                   ) : null}
                   Create Tag
                 </button>

@@ -5,6 +5,8 @@ import { useUIStore } from "@/store/ui-store";
 import { AppRoutes } from "@/routes/index"; // Points to src/routes/index.tsx
 import { RouteErrorBoundary } from "@/components/layout/RouteErrorBoundary";
 
+import { Loader } from "./components/ui/Loader";
+
 // Global React Query defaults — applied to ALL queries unless overridden.
 // These are the safety net for any hook that forgets to set its own options.
 const queryClient = new QueryClient({
@@ -77,8 +79,8 @@ function App() {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-          <p className="text-xs text-muted-foreground animate-pulse">
+          <Loader size="lg" />
+          <p className="text-xs text-muted-foreground animate-pulse mt-2">
             Verifying secure workspace session...
           </p>
         </div>

@@ -2,6 +2,7 @@ import React from "react";
 import { useNotes, useUpdateNote } from "@/hooks/useNotes";
 import { useUIStore } from "@/store/ui-store";
 import { Star, FileText, ArrowRight } from "lucide-react";
+import { Loader } from "../../components/ui/Loader";
 import { getNotePreview } from "@/lib/utils";
 
 export const FavoritesPage: React.FC = () => {
@@ -24,7 +25,7 @@ export const FavoritesPage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <Loader size="md" />
       </div>
     );
   }
