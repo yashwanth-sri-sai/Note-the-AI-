@@ -48,7 +48,7 @@ async def run_evaluation_for_case(workspace_id: uuid.UUID, test_case: Dict[str, 
         
         # 3. LLM Generation (Skip if FAST mode)
         if mode != "fast":
-            rag_service = RAGService(db)
+            rag_service = RAGGenerationService(db)
             sys_prompt = rag_service._build_system_prompt()
             
             # Manually invoke LLM to avoid saving to chat history DB
@@ -60,13 +60,18 @@ async def run_evaluation_for_case(workspace_id: uuid.UUID, test_case: Dict[str, 
             }
             
             llm_start = time.perf_counter()
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
+            
+            async def _make_call():
+                async with httpx.AsyncClient(timeout=rag_service.settings.AI_GENERATION_TIMEOUT) as client:
                     response = await client.post(url, headers=headers, json=payload)
-                    time_to_first_token = time.perf_counter() - llm_start
                     response.raise_for_status()
-                    data = response.json()
-                    answer = data["candidates"][0]["content"]["parts"][0]["text"]
+                    return response.json()
+
+            from app.core.retries import retry_with_backoff
+            try:
+                data = await retry_with_backoff(_make_call)
+                time_to_first_token = time.perf_counter() - llm_start
+                answer = data["candidates"][0]["content"]["parts"][0]["text"]
             except Exception as e:
                 answer = f"Error during generation: {str(e)}"
                 

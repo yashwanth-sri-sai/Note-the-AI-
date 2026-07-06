@@ -30,6 +30,12 @@ class CohereReranker:
         # Maintain original vector rank for diagnostics, prioritizing final_score
         sorted_by_vector = sorted(candidates, key=lambda x: x.get("final_score", x.get("similarity_score", 0.0)), reverse=True)
         
+        from app.core.config import settings
+        from app.core.circuit_breaker import reranker_breaker
+        from app.core.retries import retry_with_backoff
+        import logging
+        logger = logging.getLogger("app.services.reranking")
+
         # Prepare docs for Cohere
         docs = [c.get("chunk_text", "") for c in sorted_by_vector]
         
@@ -46,28 +52,34 @@ class CohereReranker:
             "top_n": top_n
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
+        async def _make_call():
+            async with httpx.AsyncClient(timeout=settings.AI_RERANK_TIMEOUT) as client:
                 response = await client.post(self.url, headers=headers, json=payload)
                 response.raise_for_status()
-                data = response.json()
-        except Exception as e:
-            print(f"Cohere reranker failed: {e}. Falling back to vector scores.")
+                return response.json()
+
+        async def _run_rerank():
+            data = await retry_with_backoff(_make_call)
+            # Process results
+            reranked_results = []
+            for new_rank, result in enumerate(data.get("results", [])):
+                original_idx = result["index"]
+                reranker_score = result["relevance_score"]
+                chunk = sorted_by_vector[original_idx]
+                # Update the similarity score with the reranker's relevance score
+                chunk["similarity_score"] = reranker_score
+                reranked_results.append(chunk)
+            return reranked_results
+
+        def _fallback():
+            logger.warning("Cohere Reranker circuit breaker is OPEN. Falling back to vector similarity scores.")
             return sorted_by_vector[:top_n]
 
-        # Process results
-        reranked_results = []
-        
-        for new_rank, result in enumerate(data.get("results", [])):
-            original_idx = result["index"]
-            reranker_score = result["relevance_score"]
-            
-            chunk = sorted_by_vector[original_idx]
-            
-            # Update the similarity score with the reranker's relevance score
-            chunk["similarity_score"] = reranker_score
-            reranked_results.append(chunk)
-        return reranked_results
+        try:
+            return await reranker_breaker.execute(_run_rerank, _fallback)
+        except Exception as e:
+            logger.error(f"Cohere reranker execution failed: {e}. Falling back to vector scores.")
+            return sorted_by_vector[:top_n]
 
 
 def get_reranker_provider() -> RerankerProvider:

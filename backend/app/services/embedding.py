@@ -31,14 +31,14 @@ class GeminiEmbeddingProvider:
         if not self.api_key:
             raise ValueError("GEMINI_API_KEY is not configured.")
         
+        from app.core.config import settings
+        from app.core.circuit_breaker import embedding_breaker
+
         headers = {"Content-Type": "application/json"}
         params = {"key": self.api_key}
         
-        # Build batch requests
-        embedded_vectors = []
-        
         async def _make_call(text_str: str) -> List[float]:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=settings.AI_EMBEDDING_TIMEOUT) as client:
                 payload = {
                     "content": {"parts": [{"text": text_str}]}
                 }
@@ -49,17 +49,34 @@ class GeminiEmbeddingProvider:
                 data = response.json()
                 return data["embedding"]["values"]
 
-        for text in texts:
-            vector = await retry_with_backoff(_make_call, text)
-            
-            # Zero pad to 1536 dimensions
-            if len(vector) < 1536:
-                vector = vector + [0.0] * (1536 - len(vector))
-            elif len(vector) > 1536:
-                vector = vector[:1536]
-            embedded_vectors.append(vector)
+        async def _run_embeddings():
+            embedded_vectors = []
+            for text in texts:
+                vector = await retry_with_backoff(_make_call, text)
                 
-        return embedded_vectors
+                # Zero pad to 1536 dimensions
+                if len(vector) < 1536:
+                    vector = vector + [0.0] * (1536 - len(vector))
+                elif len(vector) > 1536:
+                    vector = vector[:1536]
+                embedded_vectors.append(vector)
+            return embedded_vectors
+
+        async def _fallback_local():
+            import logging
+            logger = logging.getLogger("app.services.embedding")
+            logger.warning("Gemini Embedding Provider circuit breaker is OPEN. Falling back to local pseudo-embeddings.")
+            local_provider = LocalEmbeddingProvider()
+            return await local_provider.get_embeddings(texts)
+
+        try:
+            return await embedding_breaker.execute(_run_embeddings, _fallback_local)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("app.services.embedding")
+            logger.error(f"Gemini Embeddings call failed: {e}. Executing local fallback.")
+            local_provider = LocalEmbeddingProvider()
+            return await local_provider.get_embeddings(texts)
 
 
 class OpenAIEmbeddingProvider:
@@ -76,6 +93,9 @@ class OpenAIEmbeddingProvider:
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY is not configured.")
         
+        from app.core.config import settings
+        from app.core.circuit_breaker import embedding_breaker
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
@@ -86,25 +106,42 @@ class OpenAIEmbeddingProvider:
         }
         
         async def _make_call() -> dict:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=settings.AI_EMBEDDING_TIMEOUT) as client:
                 response = await client.post(self.url, headers=headers, json=payload)
                 if response.status_code != 200:
                     raise Exception(f"OpenAI API returned error {response.status_code}: {response.text}")
                 return response.json()
             
-        data = await retry_with_backoff(_make_call)
-        # Sort by index to preserve order
-        results = sorted(data["data"], key=lambda x: x["index"])
-        
-        vectors = []
-        for r in results:
-            vector = r["embedding"]
-            if len(vector) < 1536:
-                vector = vector + [0.0] * (1536 - len(vector))
-            elif len(vector) > 1536:
-                vector = vector[:1536]
-            vectors.append(vector)
-        return vectors
+        async def _run_embeddings():
+            data = await retry_with_backoff(_make_call)
+            # Sort by index to preserve order
+            results = sorted(data["data"], key=lambda x: x["index"])
+            
+            vectors = []
+            for r in results:
+                vector = r["embedding"]
+                if len(vector) < 1536:
+                    vector = vector + [0.0] * (1536 - len(vector))
+                elif len(vector) > 1536:
+                    vector = vector[:1536]
+                vectors.append(vector)
+            return vectors
+
+        async def _fallback_local():
+            import logging
+            logger = logging.getLogger("app.services.embedding")
+            logger.warning("OpenAI Embedding Provider circuit breaker is OPEN. Falling back to local pseudo-embeddings.")
+            local_provider = LocalEmbeddingProvider()
+            return await local_provider.get_embeddings(texts)
+
+        try:
+            return await embedding_breaker.execute(_run_embeddings, _fallback_local)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("app.services.embedding")
+            logger.error(f"OpenAI Embeddings call failed: {e}. Executing local fallback.")
+            local_provider = LocalEmbeddingProvider()
+            return await local_provider.get_embeddings(texts)
 
 
 class LocalEmbeddingProvider:

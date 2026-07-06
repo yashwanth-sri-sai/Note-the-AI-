@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     DEFAULT_CONTEXT_TOKEN_LIMIT: int = 30000
     DEBUG_RAG: bool = False
 
+    # AI Service Timeouts
+    AI_EMBEDDING_TIMEOUT: float = 30.0
+    AI_GENERATION_TIMEOUT: float = 60.0
+    AI_RERANK_TIMEOUT: float = 15.0
+
     # Evaluation & Regression Thresholds
     EVAL_RECALL_DROP_THRESHOLD: float = 0.05
     EVAL_GROUNDEDNESS_DROP_THRESHOLD: float = 0.05

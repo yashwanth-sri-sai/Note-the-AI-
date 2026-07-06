@@ -6,6 +6,7 @@ from tenacity import (
     AsyncRetrying,
     stop_after_attempt,
     wait_exponential,
+    wait_random,
     retry_if_exception_type,
 )
 
@@ -21,7 +22,7 @@ async def retry_with_backoff(
     retry_tracker: Optional[Dict[str, Any]] = None,
     **kwargs: Any
 ) -> Any:
-    """Execute an asynchronous coroutine function using tenacity with exponential backoff and track retry states."""
+    """Execute an asynchronous coroutine function using tenacity with exponential backoff, random jitter, and track retry states."""
     retry_count = 0
     failure_reason = None
     last_attempt_at = None
@@ -46,7 +47,7 @@ async def retry_with_backoff(
     try:
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(max_retries),
-            wait=wait_exponential(multiplier=initial_delay, exp_base=backoff_factor, max=30.0),
+            wait=wait_exponential(multiplier=initial_delay, exp_base=backoff_factor, max=30.0) + wait_random(0.0, 1.0),
             before_sleep=before_sleep_hook,
             reraise=True
         ):

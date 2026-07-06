@@ -80,6 +80,9 @@ class AIService:
     async def _call_gemini_json(self, prompt: str) -> Optional[Any]:
         """Call Gemini API and parse JSON from the response. Returns None on failure."""
         from app.core.config import settings
+        from app.core.retries import retry_with_backoff
+        from app.core.circuit_breaker import llm_breaker
+
         gemini_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         gemini_model = settings.GEMINI_MODEL or os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
         if not gemini_key:
@@ -89,18 +92,30 @@ class AIService:
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"}
         }
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+
+        async def _make_call():
+            async with httpx.AsyncClient(timeout=settings.AI_GENERATION_TIMEOUT) as client:
                 resp = await client.post(url, params={"key": gemini_key}, json=payload)
                 if resp.status_code != 200:
-                    return None
+                    raise Exception(f"Gemini API returned error {resp.status_code}: {resp.text}")
                 data = resp.json()
                 raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
                 # Strip markdown code fences if Gemini wraps in ```json
                 raw_text = re.sub(r'^```(?:json)?\s*', '', raw_text)
                 raw_text = re.sub(r'\s*```$', '', raw_text)
                 return json.loads(raw_text)
-        except Exception:
+
+        async def _run_with_retry():
+            return await retry_with_backoff(_make_call)
+
+        def _fallback():
+            logger.error("Circuit breaker fallback triggered for Gemini JSON call.")
+            return None
+
+        try:
+            return await llm_breaker.execute(_run_with_retry, _fallback)
+        except Exception as e:
+            logger.error(f"Gemini JSON API call failed: {e}")
             return None
 
     async def _get_workspace_context(self, workspace_id: uuid.UUID, note_id: uuid.UUID, limit: int = 10) -> str:
