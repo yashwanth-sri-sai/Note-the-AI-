@@ -17,14 +17,31 @@ class CorrelationIdFilter(logging.Filter):
         return True
 
 
+import re
+
+SENSITIVE_KEY_RE = re.compile(
+    r'(?i)\b(authorization|bearer|token|secret|key|password|email|credentials|pwd)\b[\s:="\'\[{]*(?:[^\s,"\'\}]{8,})',
+    re.IGNORECASE
+)
+
+def sanitize_message(msg: str) -> str:
+    """Mask sensitive keys, tokens, and credentials in log messages."""
+    if not isinstance(msg, str):
+        return msg
+    return SENSITIVE_KEY_RE.sub(r'\1: [REDACTED]', msg)
+
+
 class JSONFormatter(logging.Formatter):
     """Custom formatter that serializes log records into JSON format for production telemetry."""
 
     def format(self, record: logging.LogRecord) -> str:
+        raw_message = record.getMessage()
+        sanitized_message = sanitize_message(raw_message)
+        
         log_data: Dict[str, Any] = {
             "timestamp": self.formatTime(record, self.datefmt),
             "level": record.levelname,
-            "message": record.getMessage(),
+            "message": sanitized_message,
             "logger": record.name,
             "file": f"{record.filename}:{record.lineno}",
             "correlation_id": getattr(record, "correlation_id", "-"),

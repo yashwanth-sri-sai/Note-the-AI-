@@ -57,8 +57,21 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
-            process_time = (time.perf_counter() - start_time) * 1000  # ms
+            process_duration_s = time.perf_counter() - start_time
+            process_time = process_duration_s * 1000  # ms
             status_code = response.status_code
+
+            # Record Prometheus metrics
+            from app.core.metrics import metrics_store
+            metrics_store.increment_counter("noteai_api_requests_total", {
+                "method": method,
+                "endpoint": path,
+                "status": str(status_code)
+            })
+            metrics_store.set_gauge("noteai_api_request_duration_seconds", process_duration_s, {
+                "method": method,
+                "endpoint": path
+            })
 
             # Categorize log level based on response code
             if status_code >= 500:
@@ -78,7 +91,21 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         except Exception as e:
             # Log any unhandled exceptions before they propagate to the global handler
-            process_time = (time.perf_counter() - start_time) * 1000
+            process_duration_s = time.perf_counter() - start_time
+            process_time = process_duration_s * 1000
+            
+            # Record Prometheus metrics for failure
+            from app.core.metrics import metrics_store
+            metrics_store.increment_counter("noteai_api_requests_total", {
+                "method": method,
+                "endpoint": path,
+                "status": "500"
+            })
+            metrics_store.set_gauge("noteai_api_request_duration_seconds", process_duration_s, {
+                "method": method,
+                "endpoint": path
+            })
+
             logger.exception(
                 f"Unhandled exception on {method} {path} - Duration: {process_time:.2f}ms - Error: {str(e)}"
             )

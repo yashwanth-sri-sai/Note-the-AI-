@@ -40,6 +40,9 @@ async def retry_with_backoff(
             retry_tracker["failure_reason"] = failure_reason
             retry_tracker["last_attempt_at"] = last_attempt_at
             
+        from app.core.metrics import metrics_store
+        metrics_store.increment_counter("noteai_ai_request_retries_total")
+
         logger.warning(
             f"Attempt {retry_count} failed: {failure_reason}. Retrying in {retry_state.next_action.sleep:.1f}s..."
         )

@@ -220,6 +220,28 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         }
     }
 
+@app.get("/health/liveness", tags=["Health"])
+async def health_liveness():
+    return {"status": "healthy"}
+
+@app.get("/health/readiness", tags=["Health"])
+async def health_readiness(db: AsyncSession = Depends(get_db)):
+    try:
+        res = await safe_db_execute(db, text("SELECT 1"))
+        db_ok = (res.scalar() == 1) if res else False
+        if db_ok:
+            return {"status": "ready"}
+        return JSONResponse(status_code=503, content={"status": "not_ready", "reason": "Database test query failed."})
+    except Exception as e:
+        return JSONResponse(status_code=503, content={"status": "not_ready", "reason": str(e)})
+
+@app.get("/metrics", tags=["Metrics"])
+async def metrics_endpoint():
+    from fastapi.responses import Response
+    from app.core.metrics import metrics_store
+    metrics_data = metrics_store.export_metrics()
+    return Response(content=metrics_data, media_type="text/plain")
+
 @app.get("/health/db", tags=["Health"])
 async def health_db(db: AsyncSession = Depends(get_db)):
     try:

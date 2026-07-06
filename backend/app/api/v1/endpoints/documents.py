@@ -32,6 +32,7 @@ async def run_document_ingestion_pipeline(
     db_session_factory,
     workspace_id: uuid.UUID = None,
     user_id: uuid.UUID = None,
+    correlation_id: str = None,
 ):
     """Asynchronous background worker executing page-by-page text extraction, chunking, and vector indexing."""
     import asyncio
@@ -47,6 +48,10 @@ async def run_document_ingestion_pipeline(
     from app.db.models.extensions import Flashcard, Quiz
     from sqlalchemy import select
     from datetime import datetime
+    from app.core.logging_conf import correlation_id_ctx
+
+    if correlation_id:
+        correlation_id_ctx.set(correlation_id)
 
     logger = logging.getLogger("app.api.documents")
     logger.info(f"Starting ingestion pipeline for doc {document_id}, job {job_id}")
@@ -66,6 +71,10 @@ async def run_document_ingestion_pipeline(
             if doc:
                 doc.status = status_str
             await db.commit()
+
+            # Record document processing status in Prometheus metrics
+            from app.core.metrics import metrics_store
+            metrics_store.set_gauge("noteai_document_processing_status", 1.0, {"status": status_str})
 
         if session:
             await _update(session)
@@ -485,6 +494,8 @@ async def upload_document(
 
         # 5. Enqueue background ingestion pipeline task
         from app.db.session import async_session_factory
+        from app.core.logging_conf import correlation_id_ctx
+        corr_id = correlation_id_ctx.get()
         background_tasks.add_task(
             run_document_ingestion_pipeline,
             doc.id,
@@ -495,6 +506,7 @@ async def upload_document(
             async_session_factory,
             workspace_id,
             current_user.id,
+            corr_id,
         )
 
 

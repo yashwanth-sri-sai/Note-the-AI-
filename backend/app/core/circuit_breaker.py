@@ -18,12 +18,17 @@ class CircuitBreaker:
     def record_success(self):
         if self.state != "CLOSED":
             logger.info(f"Circuit Breaker [{self.name}] recovered and is now CLOSED.")
+            from app.core.metrics import metrics_store
+            metrics_store.increment_counter("noteai_circuit_breaker_events_total", {"name": self.name, "event_type": "closed"})
         self.failure_count = 0
         self.state = "CLOSED"
 
     def record_failure(self):
         self.failure_count += 1
         if self.failure_count >= self.failure_threshold:
+            if self.state != "OPEN":
+                from app.core.metrics import metrics_store
+                metrics_store.increment_counter("noteai_circuit_breaker_events_total", {"name": self.name, "event_type": "open"})
             self.state = "OPEN"
             self.last_state_change = time.time()
             logger.error(f"Circuit Breaker [{self.name}] opened! Threshold of {self.failure_threshold} failures reached. Disabling service for {self.recovery_timeout}s.")
