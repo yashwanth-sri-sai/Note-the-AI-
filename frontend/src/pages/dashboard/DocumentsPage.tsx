@@ -37,10 +37,11 @@ export const DocumentsPage: React.FC = () => {
         (d: DocumentItem) => d.filename === current.progressFilename
       );
       if (activeDoc) {
-        if (activeDoc.status === "completed") {
+        const s = activeDoc.status.toUpperCase();
+        if (s === "COMPLETED") {
           setUploadStatus({ status: "completed", message: "Document processed successfully!" });
           setTimeout(() => setUploadStatus({ status: "idle" }), 3000);
-        } else if (activeDoc.status === "failed") {
+        } else if (s === "FAILED") {
           setUploadStatus({ status: "failed", message: "Failed to extract or embed document contents." });
           setTimeout(() => setUploadStatus({ status: "idle" }), 4000);
         }
@@ -125,29 +126,43 @@ export const DocumentsPage: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
+    const s = status.toUpperCase();
+    switch (s) {
+      case "COMPLETED":
         return (
           <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shadow-sm">
             <CheckCircle2 className="h-3 w-3" /> Ready
           </span>
         );
-      case "processing":
-        return (
-          <span className="flex items-center gap-1 text-[9px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 shadow-sm animate-pulse">
-            <Loader2 className="h-3 w-3 animate-spin" /> Chunking...
-          </span>
-        );
-      case "pending":
+      case "PENDING":
+      case "UPLOADED":
         return (
           <span className="flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 shadow-sm">
             <Clock className="h-3 w-3 animate-bounce" /> Enqueued
           </span>
         );
-      case "failed":
+      case "FAILED":
         return (
           <span className="flex items-center gap-1 text-[9px] font-bold text-red-500 bg-red-500/10 px-2 py-0.5 rounded-full border border-red-500/20 shadow-sm">
             <AlertCircle className="h-3 w-3" /> Failed
+          </span>
+        );
+      case "PROCESSING":
+      case "TEXT_EXTRACTED":
+      case "CHUNKED":
+      case "EMBEDDED":
+      case "FLASHCARDS_READY":
+      case "QUIZZES_READY":
+        let label = "Processing...";
+        if (s === "TEXT_EXTRACTED") label = "Text Extracted";
+        else if (s === "CHUNKED") label = "Chunking text...";
+        else if (s === "EMBEDDED") label = "Embedding vectors...";
+        else if (s === "FLASHCARDS_READY") label = "Generating flashcards...";
+        else if (s === "QUIZZES_READY") label = "Generating quizzes...";
+        
+        return (
+          <span className="flex items-center gap-1 text-[9px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 shadow-sm animate-pulse">
+            <Loader2 className="h-3 w-3 animate-spin" /> {label}
           </span>
         );
       default:

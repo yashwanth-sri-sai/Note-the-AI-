@@ -23,6 +23,9 @@ class ProcessingJobResponse(BaseModel):
     document_id: uuid.UUID
     status: str
     error_message: Optional[str] = None
+    retry_count: int
+    processing_started_at: Optional[datetime] = None
+    processing_completed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

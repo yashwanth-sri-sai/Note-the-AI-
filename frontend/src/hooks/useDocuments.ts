@@ -8,7 +8,7 @@ export interface DocumentItem {
   filename: string;
   file_size: number;
   content_type: string;
-  status: "pending" | "processing" | "completed" | "failed";
+  status: "pending" | "processing" | "completed" | "failed" | "UPLOADED" | "TEXT_EXTRACTED" | "CHUNKED" | "EMBEDDED" | "FLASHCARDS_READY" | "QUIZZES_READY" | "COMPLETED" | "FAILED";
   created_at: string;
 }
 
@@ -37,7 +37,11 @@ export const useDocuments = () => {
       if (
         data &&
         data.some(
-          (doc) => doc.status === "pending" || doc.status === "processing"
+          (doc) => 
+            doc.status !== "completed" && 
+            doc.status !== "failed" && 
+            doc.status !== "COMPLETED" && 
+            doc.status !== "FAILED"
         )
       ) {
         return 3000; // 3 s — tight enough to feel responsive during uploads

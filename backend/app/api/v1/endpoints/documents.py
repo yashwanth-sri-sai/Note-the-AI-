@@ -36,154 +36,266 @@ async def run_document_ingestion_pipeline(
     """Asynchronous background worker executing page-by-page text extraction, chunking, and vector indexing."""
     import asyncio
     import time as _time
+    import logging
+    import traceback
+    import re
     from app.services.metrics_service import log_latency_metric
     from app.core.config import settings
+    from app.services.ai import AIService
+    from app.db.models.note import Note
+    from app.db.models.document import Document, DocumentChunk, Embedding, ProcessingJob
+    from app.db.models.extensions import Flashcard, Quiz
+    from sqlalchemy import select
+    from datetime import datetime
 
-    pipeline_start = _time.perf_counter()
+    logger = logging.getLogger("app.api.documents")
+    logger.info(f"Starting ingestion pipeline for doc {document_id}, job {job_id}")
 
-    async with db_session_factory() as db:
-        # Load job and doc
-        job = await db.get(ProcessingJob, job_id)
-        doc = await db.get(Document, document_id)
-        if not job or not doc:
-            return
-
-        # Resolve workspace_id from doc if not provided
-        _workspace_id = workspace_id or doc.workspace_id
-        _user_id = user_id or doc.created_by
-
-        try:
-            # 1. Update status to processing
-            job.status = "processing"
-            doc.status = "processing"
+    async def update_status(status_str: str, error_msg: str = None, session = None):
+        async def _update(db):
+            job = await db.get(ProcessingJob, job_id)
+            doc = await db.get(Document, document_id)
+            if job:
+                job.status = status_str
+                if error_msg:
+                    job.error_message = error_msg
+                if status_str == "UPLOADED":
+                    job.processing_started_at = datetime.utcnow()
+                elif status_str in ["COMPLETED", "FAILED"]:
+                    job.processing_completed_at = datetime.utcnow()
+            if doc:
+                doc.status = status_str
             await db.commit()
 
-            # 2. Extract unified text and split it
-            extractor = get_extractor(filename, content_type)
-            chunking_service = get_chunking_service()
+        if session:
+            await _update(session)
+        else:
+            async with db_session_factory() as db:
+                await _update(db)
+
+    # 1. Initialize UPLOADED state
+    try:
+        await update_status("UPLOADED")
+    except Exception as e:
+        logger.error(f"Failed to initialize status: {e}")
+
+    max_retries = 3
+    retry_delay = 2.0
+    
+    extracted_text = ""
+    flat_chunks = []
+    embedding_latency_ms = 0.0
+    pipeline_start = _time.perf_counter()
+
+    for attempt in range(max_retries + 1):
+        try:
+            async with db_session_factory() as db:
+                # Update job's retry count in db
+                job = await db.get(ProcessingJob, job_id)
+                if job:
+                    job.retry_count = attempt
+                    await db.commit()
+
+                # Step A: Text Extraction
+                logger.info(f"Ingestion attempt {attempt}: Extracting text...")
+                await update_status("TEXT_EXTRACTED", session=db)
+                
+                extractor = get_extractor(filename, content_type)
+                extracted_data = extractor.extract_unified(file_bytes)
+                unified_text = extracted_data["text"]
+                page_map = extracted_data["page_map"]
+                
+                if not unified_text.strip():
+                    raise ValueError("No readable text content extracted from document.")
+                
+                # Step B: Chunking
+                logger.info(f"Ingestion attempt {attempt}: Chunking document...")
+                await update_status("CHUNKED", session=db)
+                
+                chunking_service = get_chunking_service()
+                sub_chunks = chunking_service.split_text_with_offsets(unified_text)
+                
+                flat_chunks = []
+                chunk_idx = 0
+                for sc in sub_chunks:
+                    mapped_page = 1
+                    mapped_section = None
+                    for p in page_map:
+                        if p["start_offset"] <= sc["start_offset"] < p["end_offset"]:
+                            mapped_page = p["page_number"]
+                            mapped_section = p["section_title"]
+                            break
+                    if not mapped_section and page_map and sc["start_offset"] >= page_map[-1]["end_offset"]:
+                        mapped_page = page_map[-1]["page_number"]
+                        mapped_section = page_map[-1]["section_title"]
+                    
+                    tokens = TokenService.estimate_tokens(sc["text"])
+                    source_ref = f"{filename}#page={mapped_page}" if mapped_page else filename
+                    
+                    flat_chunks.append({
+                        "text": sc["text"],
+                        "chunk_index": chunk_idx,
+                        "page_number": mapped_page,
+                        "section_title": mapped_section,
+                        "start_offset": sc["start_offset"],
+                        "end_offset": sc["end_offset"],
+                        "token_count": tokens,
+                        "source_reference": source_ref
+                    })
+                    chunk_idx += 1
+
+                extracted_text = "\n\n".join([c["text"] for c in flat_chunks])
+                
+                # Step C: Embedding
+                logger.info(f"Ingestion attempt {attempt}: Checking existing chunks/embeddings...")
+                await update_status("EMBEDDED", session=db)
+
+                # Check if chunks already exist (Idempotency)
+                stmt = select(DocumentChunk).where(DocumentChunk.document_id == document_id)
+                res = await db.execute(stmt)
+                existing_chunks = res.scalars().all()
+
+                if not existing_chunks:
+                    # Chunks don't exist, generate and save them
+                    logger.info("Generating batch embeddings...")
+                    embedding_provider = get_embedding_provider()
+                    texts_to_embed = [c["text"] for c in flat_chunks]
+                    embedding_start = _time.perf_counter()
+                    vectors = await embedding_provider.get_embeddings(texts_to_embed)
+                    embedding_latency_ms = (_time.perf_counter() - embedding_start) * 1000.0
+
+                    logger.info("Saving chunks and embeddings...")
+                    for chunk_data, vector in zip(flat_chunks, vectors):
+                        chunk = DocumentChunk(
+                            document_id=document_id,
+                            chunk_index=chunk_data["chunk_index"],
+                            chunk_text=chunk_data["text"],
+                            page_number=chunk_data["page_number"],
+                            section_title=chunk_data["section_title"],
+                            start_offset=chunk_data["start_offset"],
+                            end_offset=chunk_data["end_offset"],
+                            token_count=chunk_data["token_count"],
+                            source_reference=chunk_data["source_reference"]
+                        )
+                        db.add(chunk)
+                        await db.flush()  # Generate chunk.id
+
+                        embedding_record = Embedding(
+                            chunk_id=chunk.id,
+                            embedding=vector,
+                            provider=getattr(embedding_provider, "__class__").__name__,
+                            model_name=getattr(embedding_provider, "model", "LocalTrigram")
+                        )
+                        db.add(embedding_record)
+                    await db.commit()
+                else:
+                    logger.info("Chunks and embeddings already exist. Skipping creation.")
+
+            break # Success, break attempt loop!
             
-            flat_chunks = []
-            chunk_idx = 0
+        except Exception as e:
+            logger.error(f"Error on ingestion attempt {attempt}: {str(e)}")
+            logger.error(traceback.format_exc())
             
-            extracted_data = extractor.extract_unified(file_bytes)
-            unified_text = extracted_data["text"]
-            page_map = extracted_data["page_map"]
-            
-            if not unified_text.strip():
-                raise ValueError("No readable text content extracted from document.")
-                
-            sub_chunks = chunking_service.split_text_with_offsets(unified_text)
-            
-            for sc in sub_chunks:
-                # Map chunk to page and section based on start_offset
-                mapped_page = 1
-                mapped_section = None
-                
-                for p in page_map:
-                    if p["start_offset"] <= sc["start_offset"] < p["end_offset"]:
-                        mapped_page = p["page_number"]
-                        mapped_section = p["section_title"]
-                        break
-                
-                # Fallback if somehow beyond bounds
-                if not mapped_section and page_map and sc["start_offset"] >= page_map[-1]["end_offset"]:
-                    mapped_page = page_map[-1]["page_number"]
-                    mapped_section = page_map[-1]["section_title"]
-                
-                tokens = TokenService.estimate_tokens(sc["text"])
-                source_ref = f"{filename}#page={mapped_page}" if mapped_page else filename
-                
-                flat_chunks.append({
-                    "text": sc["text"],
-                    "chunk_index": chunk_idx,
-                    "page_number": mapped_page,
-                    "section_title": mapped_section,
-                    "start_offset": sc["start_offset"],
-                    "end_offset": sc["end_offset"],
-                    "token_count": tokens,
-                    "source_reference": source_ref
-                })
-                chunk_idx += 1
+            # Determine if validation/unrecoverable error
+            is_val = isinstance(e, (ValueError, TypeError, AttributeError)) or "MIME" in str(e)
+            if is_val or attempt == max_retries:
+                # Mark as failed and raise/abort
+                await update_status("FAILED", error_msg=str(e))
+                # Update Note content to indicate failure
+                async with db_session_factory() as db:
+                    note = await db.get(Note, document_id)
+                    if note:
+                        note.content = f"Failed to process document: {str(e)}"
+                        db.add(note)
+                        await db.commit()
+                return # Abort ingestion pipeline
 
-            # 3. Generate batch embeddings (track embedding latency)
-            embedding_provider = get_embedding_provider()
-            texts_to_embed = [c["text"] for c in flat_chunks]
-            embedding_start = _time.perf_counter()
-            vectors = await embedding_provider.get_embeddings(texts_to_embed)
-            embedding_latency_ms = (_time.perf_counter() - embedding_start) * 1000.0
+            # Wait with exponential backoff
+            logger.info(f"Retrying in {retry_delay} seconds...")
+            await asyncio.sleep(retry_delay)
+            retry_delay *= 2.0
 
-            # 4. Store chunks & embeddings in database
-            for chunk_data, vector in zip(flat_chunks, vectors):
-                chunk = DocumentChunk(
-                    document_id=document_id,
-                    chunk_index=chunk_data["chunk_index"],
-                    chunk_text=chunk_data["text"],
-                    page_number=chunk_data["page_number"],
-                    section_title=chunk_data["section_title"],
-                    start_offset=chunk_data["start_offset"],
-                    end_offset=chunk_data["end_offset"],
-                    token_count=chunk_data["token_count"],
-                    source_reference=chunk_data["source_reference"]
-                )
-                db.add(chunk)
-                await db.flush()  # Generate chunk.id
+    # Retrieve workspace/user params from Document if needed
+    _workspace_id = workspace_id
+    _user_id = user_id
+    if not _workspace_id or not _user_id:
+        async with db_session_factory() as db:
+            doc = await db.get(Document, document_id)
+            if doc:
+                _workspace_id = _workspace_id or doc.workspace_id
+                _user_id = _user_id or doc.created_by
 
-                embedding_record = Embedding(
-                    chunk_id=chunk.id,
-                    embedding=vector,
-                    provider=getattr(embedding_provider, "__class__").__name__,
-                    model_name=getattr(embedding_provider, "model", "LocalTrigram")
-                )
-                db.add(embedding_record)
-
-            # 5. Complete Job & Document Status
-            job.status = "completed"
-            doc.status = "completed"
-
-            # Update corresponding Note content with the extracted text
-            extracted_text = "\n\n".join([c["text"] for c in flat_chunks])
+    # Update corresponding Note content with the extracted text
+    if extracted_text:
+        async with db_session_factory() as db:
             note = await db.get(Note, document_id)
             if note:
                 note.content = extracted_text
                 db.add(note)
-
-            await db.commit()
-
-            # 6. Log latency metrics asynchronously
-            document_processing_ms = (_time.perf_counter() - pipeline_start) * 1000.0
-            asyncio.create_task(log_latency_metric(
-                workspace_id=_workspace_id,
-                user_id=_user_id,
-                embedding_latency_ms=embedding_latency_ms,
-                document_processing_ms=document_processing_ms,
-            ))
-
-        except Exception as e:
-            # Capture exception to Sentry if configured
-            if settings.SENTRY_DSN:
-                try:
-                    import sentry_sdk
-                    sentry_sdk.capture_exception(e)
-                except Exception:
-                    pass
-
-            # Rollback transaction and mark job as failed
-            await db.rollback()
-            # Retrieve fresh job and doc instances from database
-            job = await db.get(ProcessingJob, job_id)
-            doc = await db.get(Document, document_id)
-            if job and doc:
-                job.status = "failed"
-                job.error_message = str(e)
-                doc.status = "failed"
-
-                # Update corresponding Note content to indicate failure
-                note = await db.get(Note, document_id)
-                if note:
-                    note.content = f"Failed to process document: {str(e)}"
-                    db.add(note)
-
                 await db.commit()
+
+    # Step D: Flashcard Generation (Resilient, try-except, idempotent)
+    try:
+        logger.info("Initiating flashcard generation...")
+        await update_status("FLASHCARDS_READY")
+        async with db_session_factory() as db:
+            # Check if flashcards already exist (Idempotency)
+            fc_stmt = select(Flashcard).where(Flashcard.note_id == document_id)
+            fc_res = await db.execute(fc_stmt)
+            existing_fcs = fc_res.scalars().all()
+            if not existing_fcs:
+                ai_service = AIService(db)
+                await ai_service.generate_note_flashcards(document_id, _workspace_id)
+            else:
+                logger.info("Flashcards already exist. Skipping generation.")
+    except Exception as e:
+        logger.error(f"Flashcard generation failed: {e}")
+        # Update last_error, but continue
+        async with db_session_factory() as db:
+            job = await db.get(ProcessingJob, job_id)
+            if job:
+                job.error_message = f"Flashcard Gen Error: {str(e)}"
+                await db.commit()
+
+    # Step E: Quiz Generation (Resilient, try-except, idempotent)
+    try:
+        logger.info("Initiating quiz generation...")
+        await update_status("QUIZZES_READY")
+        async with db_session_factory() as db:
+            # Check if quizzes already exist (Idempotency)
+            qz_stmt = select(Quiz).where(Quiz.note_id == document_id)
+            qz_res = await db.execute(qz_stmt)
+            existing_qzs = qz_res.scalars().all()
+            if not existing_qzs:
+                ai_service = AIService(db)
+                await ai_service.generate_note_quiz(document_id, _workspace_id)
+            else:
+                logger.info("Quizzes already exist. Skipping generation.")
+    except Exception as e:
+        logger.error(f"Quiz generation failed: {e}")
+        # Update last_error, but continue
+        async with db_session_factory() as db:
+            job = await db.get(ProcessingJob, job_id)
+            if job:
+                job.error_message = f"Quiz Gen Error: {str(e)}"
+                await db.commit()
+
+    # Step F: Completed status
+    try:
+        await update_status("COMPLETED")
+        
+        # Log latency metrics
+        document_processing_ms = (_time.perf_counter() - pipeline_start) * 1000.0
+        asyncio.create_task(log_latency_metric(
+            workspace_id=_workspace_id,
+            user_id=_user_id,
+            embedding_latency_ms=embedding_latency_ms,
+            document_processing_ms=document_processing_ms,
+        ))
+        logger.info(f"Ingestion pipeline completed successfully for document {document_id}.")
+    except Exception as e:
+        logger.error(f"Failed to finalize completed status: {e}")
 
 
 
@@ -317,7 +429,7 @@ async def upload_document(
             file_size=file_size,
             content_type=file.content_type or "application/octet-stream",
             storage_path=storage_path,
-            status="pending",
+            status="UPLOADED",
             created_by=current_user.id
         )
         db.add(doc)
@@ -337,7 +449,7 @@ async def upload_document(
         # 4. Create ProcessingJob entry
         job = ProcessingJob(
             document_id=doc.id,
-            status="pending"
+            status="UPLOADED"
         )
         db.add(job)
         await db.flush()
