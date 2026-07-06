@@ -338,4 +338,41 @@
   transform: scale(0.98) translateY(0);
 }
 
+/* Custom CSS Loader */
+.loader {
+  display: inline-flex;
+  gap: 10px;
+  --loader-size: 20px;
+}
+.loader-sm {
+  --loader-size: 12px;
+  gap: 5px;
+}
+.loader-md {
+  --loader-size: 20px;
+  gap: 10px;
+}
+.loader-lg {
+  --loader-size: 32px;
+  gap: 15px;
+}
+.loader:before,
+.loader:after {
+  content: "";
+  height: var(--loader-size);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    linear-gradient(#222 0 0) top/100% 40% no-repeat,
+    radial-gradient(farthest-side,#000 95%,#0000) 50%/8px 8px no-repeat
+    #fff;
+  animation: l7 1.5s infinite alternate ease-in;
+}
+@keyframes l7 {
+  0%,
+  70% {background-size:100% 40%,8px 8px}
+  85% {background-size:100% 120%,8px 8px}
+  100% {background-size:100% 40%,8px 8px}
+}
+
 

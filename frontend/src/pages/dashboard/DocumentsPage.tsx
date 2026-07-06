@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { 
-  FileText, Upload, Trash2, Loader2, RefreshCw, CheckCircle2, 
+  FileText, Upload, Trash2, RefreshCw, CheckCircle2, 
   AlertCircle, Clock, FileDown, Plus, Info, Sparkles, X, ChevronRight, HelpCircle, ArrowRight
 } from "lucide-react";
+import { Loader } from "../../components/ui/Loader";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUIStore } from "@/store/ui-store";
 import { useDocuments, useUploadDocument, useDeleteDocument, DocumentItem } from "@/hooks/useDocuments";
@@ -162,7 +163,7 @@ export const DocumentsPage: React.FC = () => {
         
         return (
           <span className="flex items-center gap-1 text-[9px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 shadow-sm animate-pulse">
-            <Loader2 className="h-3 w-3 animate-spin" /> {label}
+            <Loader size="sm" /> {label}
           </span>
         );
       default:
@@ -309,8 +310,8 @@ export const DocumentsPage: React.FC = () => {
               >
                 <div className="flex gap-3 items-center">
                   <div className="shrink-0">
-                    {uploadStatus.status === "uploading" && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
-                    {uploadStatus.status === "processing" && <Loader2 className="h-5 w-5 animate-spin text-indigo-500" />}
+                    {uploadStatus.status === "uploading" && <Loader size="sm" />}
+                    {uploadStatus.status === "processing" && <Loader size="sm" />}
                     {uploadStatus.status === "completed" && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
                     {uploadStatus.status === "failed" && <AlertCircle className="h-5 w-5 text-red-500" />}
                   </div>
@@ -342,7 +343,7 @@ export const DocumentsPage: React.FC = () => {
                         : "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
                     }`}>
                       {uploadStatus.status === "uploading" ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Loader size="sm" />
                       ) : (
                         <CheckCircle2 className="h-3.5 w-3.5" />
                       )}
@@ -373,7 +374,7 @@ export const DocumentsPage: React.FC = () => {
                       {uploadStatus.status === "uploading" ? (
                         <Clock className="h-3 w-3 text-muted-foreground/30" />
                       ) : uploadStatus.status === "processing" ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Loader size="sm" />
                       ) : uploadStatus.status === "completed" ? (
                         <CheckCircle2 className="h-3.5 w-3.5" />
                       ) : (
@@ -425,7 +426,7 @@ export const DocumentsPage: React.FC = () => {
         <div className="lg:col-span-2">
           {isLoading ? (
             <div className="h-[280px] flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <Loader size="md" />
             </div>
           ) : documents.length === 0 ? (
             <motion.div 

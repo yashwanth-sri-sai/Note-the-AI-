@@ -3,7 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { BrainCircuit, Loader2, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { BrainCircuit, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Loader } from "../../components/ui/Loader";
 import { apiClient } from "@/lib/api-client";
 
 const resetSchema = z
@@ -163,7 +164,7 @@ export const ResetPassword: React.FC = () => {
               className="flex w-full items-center justify-center rounded-xl bg-primary py-2.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 hover:bg-primary/95 transition-all disabled:opacity-50 mt-2"
             >
               {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader size="sm" className="mr-2" />
               ) : null}
               Reset Password
             </button>

@@ -7,9 +7,10 @@ import { useWorkspaceStore } from "@/store/workspace-store";
 import { apiClient, getAccessToken } from "@/lib/api-client";
 import {
   Search, Plus, Star, Trash2, FolderOpen,
-  Check, ChevronDown, BookOpen, Loader2,
+  Check, ChevronDown, BookOpen,
   Sparkles, Send, X, CheckSquare, Square
 } from "lucide-react";
+import { Loader } from "../../components/ui/Loader";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { motion, AnimatePresence } from "framer-motion";
 import { getNotePreview } from "@/lib/utils";
@@ -744,7 +745,7 @@ export const NotesPage: React.FC = () => {
       <div className="flex-1 flex flex-col h-full bg-background/5 min-w-[300px]">
         {noteLoading ? (
           <div className="flex h-full items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <Loader size="md" />
           </div>
         ) : !activeNoteId ? (
           <motion.div
@@ -1111,7 +1112,7 @@ export const NotesPage: React.FC = () => {
                   className="absolute right-2 text-primary hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 transition-all cursor-pointer p-1.5"
                 >
                   {isCopilotStreaming ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader size="sm" />
                   ) : (
                     <Send className="h-4 w-4" />
                   )}

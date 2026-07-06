@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { apiClient, getAccessToken } from "@/lib/api-client";
 import {
-  BrainCircuit, Plus, Loader2, Filter, Upload, X,
+  BrainCircuit, Plus, Filter, Upload, X,
   AlertTriangle, CheckCircle2, Send, FileText,
   Sparkles, History, User, File, ExternalLink, ChevronRight,
   CheckSquare, Square, Trash2, BookOpen
 } from "lucide-react";
+import { Loader } from "../../components/ui/Loader";
 import { useUIStore } from "@/store/ui-store";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUploadDocument, useDeleteDocument } from "@/hooks/useDocuments";
@@ -607,8 +608,8 @@ export const NotebookLMChat: React.FC = () => {
         {/* Upload & Processing Status Bar */}
         {uploadProgress && (
           <div className="mx-4 mt-3 p-3 rounded-2xl bg-card border border-border/70 flex items-center gap-3 animate-fadeIn shadow-sm">
-            {uploadProgress === "uploading" && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-            {uploadProgress === "processing" && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+            {uploadProgress === "uploading" && <Loader size="sm" />}
+            {uploadProgress === "processing" && <Loader size="sm" />}
             {uploadProgress === "completed" && <CheckCircle2 className="h-4 w-4 text-green-500" />}
             {uploadProgress === "failed" && <AlertTriangle className="h-4 w-4 text-red-500" />}
             
@@ -651,7 +652,7 @@ export const NotebookLMChat: React.FC = () => {
 
             {isDocumentsLoading && documents.length === 0 ? (
               <div className="flex py-6 justify-center items-center">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                <Loader size="sm" />
               </div>
             ) : documents.length === 0 ? (
               <div className="border border-dashed border-border/80 rounded-2xl p-6 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
@@ -688,7 +689,7 @@ export const NotebookLMChat: React.FC = () => {
                             <Square className="h-4 w-4 text-muted-foreground shrink-0" />
                           )
                         ) : (
-                          <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+                          <Loader size="sm" className="shrink-0" />
                         )}
                         <div className="truncate">
                           <p className="font-semibold text-xs truncate max-w-[160px] group-hover:text-primary transition-colors text-foreground" title={doc.title}>
@@ -896,8 +897,8 @@ export const NotebookLMChat: React.FC = () => {
           {isMessagesLoading ? (
             <div className="flex h-full items-center justify-center">
               <div className="flex flex-col items-center gap-2">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-xs text-muted-foreground">Loading messages history...</p>
+                <Loader size="md" />
+                <p className="text-xs text-muted-foreground mt-2">Loading messages history...</p>
               </div>
             </div>
           ) : messages.length === 0 ? (
@@ -1125,7 +1126,7 @@ export const NotebookLMChat: React.FC = () => {
               }`}
             >
               {isStreaming ? (
-                <Loader2 className="h-4.5 w-4.5 animate-spin" />
+                <Loader size="sm" />
               ) : (
                 <Send className="h-4 w-4" />
               )}
