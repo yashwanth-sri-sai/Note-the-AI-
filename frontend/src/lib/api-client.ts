@@ -33,16 +33,26 @@ export const getAccessToken = () => accessToken;
 // Request interceptor
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Auth routes that must never be gated or retried on 401.
-const AUTH_ROUTES = new Set([
+// Routes that bypass request gating (must be able to fire before authReady is settled).
+const UNGATED_ROUTES = new Set([
   "/auth/refresh",
   "/auth/login",
   "/auth/register",
   "/users/me",
 ]);
 
-const isAuthRoute = (url: string) =>
-  [...AUTH_ROUTES].some((route) => url.endsWith(route));
+// Routes that are excluded from token refresh on 401.
+const NON_REFRESHABLE_ROUTES = new Set([
+  "/auth/refresh",
+  "/auth/login",
+  "/auth/register",
+]);
+
+const isUngatedRoute = (url: string) =>
+  [...UNGATED_ROUTES].some((route) => url.endsWith(route));
+
+const isNonRefreshableRoute = (url: string) =>
+  [...NON_REFRESHABLE_ROUTES].some((route) => url.endsWith(route));
 
 apiClient.interceptors.request.use(
   async (config) => {
@@ -53,7 +63,7 @@ apiClient.interceptors.request.use(
     // We gate on authReady (set-once, never reset) — NOT isLoading or
     // isAuthenticated, which toggle during login/logout/refresh cycles and
     // would block legitimate post-login calls or release the gate too early.
-    if (!isAuthRoute(url)) {
+    if (!isUngatedRoute(url)) {
       try {
         const { useAuthStore } = await import("@/store/auth-store");
         const store = useAuthStore.getState();
@@ -114,7 +124,7 @@ apiClient.interceptors.response.use(
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !isAuthRoute(originalRequest.url ?? "");
+      !isNonRefreshableRoute(originalRequest.url ?? "");
 
     if (!shouldAttemptRefresh) {
       return Promise.reject(error);
