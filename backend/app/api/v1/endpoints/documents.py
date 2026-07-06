@@ -79,6 +79,31 @@ async def run_document_ingestion_pipeline(
     except Exception as e:
         logger.error(f"Failed to initialize status: {e}")
 
+    # Load file bytes from storage if they were not passed (e.g. during startup recovery)
+    _workspace_id = workspace_id
+    _user_id = user_id
+    if not file_bytes:
+        logger.info(f"Loading file bytes from storage for document {document_id}")
+        try:
+            async with db_session_factory() as db:
+                doc = await db.get(Document, document_id)
+                if not doc:
+                    logger.error(f"Document {document_id} not found in database. Aborting recovery.")
+                    await update_status("FAILED", error_msg="Document not found in database.")
+                    return
+                _workspace_id = _workspace_id or doc.workspace_id
+                _user_id = _user_id or doc.created_by
+                storage_path = doc.storage_path
+            
+            from app.services.storage import StorageService
+            storage_service = StorageService()
+            file_bytes = await storage_service.get_file_bytes(storage_path)
+            logger.info(f"Successfully loaded {len(file_bytes)} bytes from storage.")
+        except Exception as e:
+            logger.error(f"Failed to load file bytes from storage: {e}")
+            await update_status("FAILED", error_msg=f"Storage retrieval error: {str(e)}")
+            return
+
     max_retries = 3
     retry_delay = 2.0
     
