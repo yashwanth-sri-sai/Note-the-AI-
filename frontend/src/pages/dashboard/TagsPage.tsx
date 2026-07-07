@@ -3,6 +3,7 @@ import { useTags, useCreateTag, useDeleteTag } from "@/hooks/useTags";
 import { Tag as TagIcon, Plus, Trash2, X, AlertCircle } from "lucide-react";
 import { Loader } from "../../components/ui/Loader";
 import { useUIStore } from "@/store/ui-store";
+import { AnimatedModal } from "@/components/motion/MotionSystem";
 
 const PRESETS = [
   "#EF4444", // Red
@@ -130,91 +131,87 @@ export const TagsPage: React.FC = () => {
       )}
 
       {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="w-full max-w-md glass-panel rounded-2xl p-6 shadow-2xl space-y-4 border border-border/80 bg-card">
-            <div className="flex justify-between items-center pb-2 border-b border-border/50">
-              <h2 className="text-base font-bold flex items-center gap-2">
-                <Plus className="h-5 w-5 text-primary" /> Create New Tag
-              </h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-muted-foreground hover:text-foreground rounded p-1"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            {errorMsg && (
-              <div className="flex items-center gap-2 rounded-xl bg-destructive/10 p-3 text-xs text-red-500">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{errorMsg}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleCreateTag} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">
-                  Tag Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Ideas, Quick, Study, Work"
-                  className="w-full rounded-xl border border-border bg-background/50 px-3.5 py-2 text-sm outline-none focus:border-primary/80 focus:ring-1 focus:ring-primary/80 transition-colors"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-muted-foreground">
-                  Pick Tag Color
-                </label>
-                <div className="grid grid-cols-5 gap-3.5">
-                  {PRESETS.map((colorPreset) => (
-                    <button
-                      key={colorPreset}
-                      type="button"
-                      onClick={() => setColor(colorPreset)}
-                      style={{ backgroundColor: colorPreset }}
-                      className={`h-7 w-7 rounded-full shrink-0 hover:scale-110 active:scale-95 transition-all relative shadow-sm border ${
-                        color === colorPreset ? "border-foreground ring-2 ring-primary/40 scale-105" : "border-transparent"
-                      }`}
-                    >
-                      {color === colorPreset && (
-                        <span className="absolute inset-0 flex items-center justify-center text-white text-[10px] font-bold">
-                          ✓
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="rounded-xl border border-border px-4 py-2 text-sm font-semibold hover:bg-muted/80 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 hover:bg-primary/95 transition-all disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <Loader size="sm" />
-                  ) : null}
-                  Create Tag
-                </button>
-              </div>
-            </form>
-          </div>
+      <AnimatedModal isOpen={showModal} onClose={() => setShowModal(false)} className="bg-card border border-border/80">
+        <div className="flex justify-between items-center pb-2 border-b border-border/50">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <Plus className="h-5 w-5 text-primary" /> Create New Tag
+          </h2>
+          <button
+            onClick={() => setShowModal(false)}
+            className="text-muted-foreground hover:text-foreground rounded p-1"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
-      )}
+
+        {errorMsg && (
+          <div className="flex items-center gap-2 rounded-xl bg-destructive/10 p-3 text-xs text-red-500 mt-4">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleCreateTag} className="space-y-4 mt-4">
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-muted-foreground">
+              Tag Name
+            </label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Ideas, Quick, Study, Work"
+              className="w-full rounded-xl border border-border bg-background/50 px-3.5 py-2 text-sm outline-none focus:border-primary/80 focus:ring-1 focus:ring-primary/80 transition-colors"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground">
+              Pick Tag Color
+            </label>
+            <div className="grid grid-cols-5 gap-3.5">
+              {PRESETS.map((colorPreset) => (
+                <button
+                  key={colorPreset}
+                  type="button"
+                  onClick={() => setColor(colorPreset)}
+                  style={{ backgroundColor: colorPreset }}
+                  className={`h-7 w-7 rounded-full shrink-0 hover:scale-110 active:scale-95 transition-all relative shadow-sm border ${
+                    color === colorPreset ? "border-foreground ring-2 ring-primary/40 scale-105" : "border-transparent"
+                  }`}
+                >
+                  {color === colorPreset && (
+                    <span className="absolute inset-0 flex items-center justify-center text-white text-[10px] font-bold">
+                      ✓
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowModal(false)}
+              className="rounded-xl border border-border px-4 py-2 text-sm font-semibold hover:bg-muted/80 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 hover:bg-primary/95 transition-all disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <Loader size="sm" />
+              ) : null}
+              Create Tag
+            </button>
+          </div>
+        </form>
+      </AnimatedModal>
     </div>
   );
 };

@@ -14,6 +14,7 @@ import {
   ChevronRight, Plus, Upload, ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { PageTransition } from "@/components/motion/MotionSystem";
 import { DashboardOverview } from "./DashboardOverview";
 import { NotesPage } from "./NotesPage";
 import { FoldersPage } from "./FoldersPage";
@@ -815,16 +816,9 @@ export const DashboardV2: React.FC = () => {
         <main className="flex-grow p-6 overflow-y-auto scrollbar bg-background">
           <Suspense fallback={<PageSkeleton />}>
             <AnimatePresence mode="wait">
-              <motion.div
-                key={location.pathname}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
-                className="w-full h-full"
-              >
+              <PageTransition pageKey={location.pathname}>
                 <Outlet />
-              </motion.div>
+              </PageTransition>
             </AnimatePresence>
           </Suspense>
         </main>

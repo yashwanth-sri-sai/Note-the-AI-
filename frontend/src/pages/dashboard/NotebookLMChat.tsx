@@ -10,6 +10,7 @@ import {
 import { Loader } from "../../components/ui/Loader";
 import { useUIStore } from "@/store/ui-store";
 import { motion, AnimatePresence } from "framer-motion";
+import { AnimatedDrawer } from "@/components/motion/MotionSystem";
 import { useUploadDocument, useDeleteDocument } from "@/hooks/useDocuments";
 import { useKnowledgeSources } from "@/components/knowledge";
 import { useChatConversations, useCreateConversation } from "@/hooks/useChatConversations";
@@ -1151,86 +1152,73 @@ export const NotebookLMChat: React.FC = () => {
       </div>
 
       {/* 3. DYNAMIC OVERLAY DRAWER: Citation Side Panel (NotebookLM style) */}
-      <AnimatePresence>
+      <AnimatedDrawer
+        isOpen={!!activeCitationPreview}
+        onClose={() => setActiveCitationPreview(null)}
+        side="right"
+      >
         {activeCitationPreview && (
-          <>
-            {/* Backdrop overlay */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setActiveCitationPreview(null)}
-              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[2px]"
-            />
-            {/* Drawer container */}
-            <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", stiffness: 280, damping: 28 }}
-              className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-card border-l border-border/80 z-50 shadow-2xl p-6 flex flex-col justify-between"
-            >
-              <div className="flex-grow flex flex-col justify-start space-y-5 overflow-y-auto scrollbar pr-1 text-left">
-                {/* Header */}
-                <div className="flex justify-between items-start border-b border-border/55 pb-3">
-                  <div>
-                    <span className="px-2.5 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-extrabold uppercase border border-primary/25">
-                      Citation Reference
-                    </span>
-                    <h3 className="font-extrabold text-sm text-foreground mt-3 leading-snug break-all" title={activeCitationPreview.document_name}>
-                      {activeCitationPreview.document_name}
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setActiveCitationPreview(null)}
-                    className="text-muted-foreground hover:text-foreground rounded-xl p-1.5 hover:bg-muted/50 transition-colors shrink-0"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
+          <div className="h-full flex flex-col justify-between p-6 overflow-hidden">
+            <div className="flex-grow flex flex-col justify-start space-y-5 overflow-y-auto scrollbar pr-1 text-left">
+              {/* Header */}
+              <div className="flex justify-between items-start border-b border-border/55 pb-3">
+                <div>
+                  <span className="px-2.5 py-0.5 rounded-lg bg-primary/10 text-primary text-[10px] font-extrabold uppercase border border-primary/25">
+                    Citation Reference
+                  </span>
+                  <h3 className="font-extrabold text-sm text-foreground mt-3 leading-snug break-all" title={activeCitationPreview.document_name}>
+                    {activeCitationPreview.document_name}
+                  </h3>
                 </div>
-
-                {/* Info Cards */}
-                <div className="grid grid-cols-2 gap-3 text-[11px] font-semibold text-muted-foreground shrink-0">
-                  <div className="p-3 rounded-2xl border border-border/60 bg-background/30 shadow-inner">
-                    <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60 font-bold">Position</span>
-                    <span className="text-foreground font-black mt-1 block">
-                      {activeCitationPreview.page_number ? `Page ${activeCitationPreview.page_number}` : activeCitationPreview.section_title ? `Section: ${activeCitationPreview.section_title}` : "Reference Chunk"}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-2xl border border-border/60 bg-background/30 shadow-inner">
-                    <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60 font-bold">Similarity</span>
-                    <span className="text-foreground font-black mt-1 block">
-                      {activeCitationPreview.similarity_score ? `${Math.round(activeCitationPreview.similarity_score * 100)}% Match` : "N/A"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Text extract */}
-                <div className="space-y-2 flex-grow flex flex-col min-h-0">
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Semantic Source Extract</label>
-                  <div className="p-4 rounded-2xl bg-muted/50 border border-border/40 overflow-y-auto flex-grow scrollbar max-h-[55vh]">
-                    <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap select-all font-medium">
-                      {activeCitationPreview.chunk_text}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer action */}
-              <div className="border-t border-border/50 pt-4 shrink-0 mt-4">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
+                <button
                   onClick={() => setActiveCitationPreview(null)}
-                  className="w-full py-3 rounded-xl bg-primary text-white text-xs font-bold shadow-lg shadow-primary/10 hover:bg-primary/95 transition-all"
+                  className="text-muted-foreground hover:text-foreground rounded-xl p-1.5 hover:bg-muted/50 transition-colors shrink-0"
                 >
-                  Close Preview
-                </motion.button>
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-            </motion.div>
-          </>
+
+              {/* Info Cards */}
+              <div className="grid grid-cols-2 gap-3 text-[11px] font-semibold text-muted-foreground shrink-0">
+                <div className="p-3 rounded-2xl border border-border/60 bg-background/30 shadow-inner">
+                  <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60 font-bold">Position</span>
+                  <span className="text-foreground font-black mt-1 block">
+                    {activeCitationPreview.page_number ? `Page ${activeCitationPreview.page_number}` : activeCitationPreview.section_title ? `Section: ${activeCitationPreview.section_title}` : "Reference Chunk"}
+                  </span>
+                </div>
+                <div className="p-3 rounded-2xl border border-border/60 bg-background/30 shadow-inner">
+                  <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60 font-bold">Similarity</span>
+                  <span className="text-foreground font-black mt-1 block">
+                    {activeCitationPreview.similarity_score ? `${Math.round(activeCitationPreview.similarity_score * 100)}% Match` : "N/A"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Text extract */}
+              <div className="space-y-2 flex-grow flex flex-col min-h-0">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Semantic Source Extract</label>
+                <div className="p-4 rounded-2xl bg-muted/50 border border-border/40 overflow-y-auto flex-grow scrollbar max-h-[55vh]">
+                  <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap select-all font-medium">
+                    {activeCitationPreview.chunk_text}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer action */}
+            <div className="border-t border-border/50 pt-4 shrink-0 mt-4">
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setActiveCitationPreview(null)}
+                className="w-full py-3 rounded-xl bg-primary text-white text-xs font-bold shadow-lg shadow-primary/10 hover:bg-primary/95 transition-all"
+              >
+                Close Preview
+              </motion.button>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
+      </AnimatedDrawer>
 
       {/* Citation Hover Tooltip */}
       {hoveredCitation && (

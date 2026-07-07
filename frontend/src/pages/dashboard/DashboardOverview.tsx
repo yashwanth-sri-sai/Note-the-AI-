@@ -12,6 +12,7 @@ import {
   Sparkles, Search, MessageSquare, Terminal, HelpCircle, Activity 
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { AnimatedHero, AnimatedCard } from "@/components/motion/MotionSystem";
 import { getNotePreview } from "@/lib/utils";
 import { Loader } from "../../components/ui/Loader";
 
@@ -204,12 +205,7 @@ export const DashboardOverview: React.FC = () => {
   }
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="show"
-      className="space-y-7 max-w-6xl mx-auto text-left pb-12"
-    >
+    <AnimatedHero className="space-y-7 max-w-6xl mx-auto text-left pb-12">
       {/* 1. Hero Greetings Module */}
       <motion.div variants={itemVariants}>
         <DashboardHero userName={user?.name || "Researcher"} workspaceName={activeWorkspaceName} />
@@ -465,7 +461,7 @@ export const DashboardOverview: React.FC = () => {
           </motion.div>
         </div>
       </div>
-    </motion.div>
+    </AnimatedHero>
   );
 };
 export default DashboardOverview;

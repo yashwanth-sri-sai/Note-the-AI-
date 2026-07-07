@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { ChevronDown, Plus, Check, Briefcase, X } from "lucide-react";
+import { AnimatedModal } from "@/components/motion/MotionSystem";
 
 export const WorkspaceSwitcher: React.FC = () => {
   const {
@@ -113,59 +114,55 @@ export const WorkspaceSwitcher: React.FC = () => {
       )}
 
       {/* Create Workspace Modal Overlay */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-card border border-border/80 rounded-2xl shadow-2xl p-6 relative animate-in scale-in duration-200">
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted/40 transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
+      <AnimatedModal isOpen={showCreateModal} onClose={() => setShowCreateModal(false)} className="bg-card border border-border/80 p-6 relative">
+        <button
+          onClick={() => setShowCreateModal(false)}
+          className="absolute top-4 right-4 p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted/40 transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
 
-            <h3 className="text-base font-bold text-foreground mb-1">
-              Create New Workspace
-            </h3>
-            <p className="text-xs text-muted-foreground mb-4">
-              Workspaces isolate your notebooks, tags, and settings, enabling multiple contexts or teams.
-            </p>
+        <h3 className="text-base font-bold text-foreground mb-1 text-left">
+          Create New Workspace
+        </h3>
+        <p className="text-xs text-muted-foreground mb-4 text-left">
+          Workspaces isolate your notebooks, tags, and settings, enabling multiple contexts or teams.
+        </p>
 
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="block text-[10px] uppercase font-bold tracking-wider text-muted-foreground mb-1.5">
-                  Workspace Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Work, Engineering Team, Personal Notes"
-                  value={newWorkspaceName}
-                  onChange={(e) => setNewWorkspaceName(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs text-foreground transition-all placeholder:text-muted-foreground/60"
-                  autoFocus
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border/40">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground rounded-xl hover:bg-muted/40 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !newWorkspaceName.trim()}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-primary hover:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-md shadow-primary/10 flex items-center gap-1.5"
-                >
-                  {isSubmitting ? "Creating..." : "Create Workspace"}
-                </button>
-              </div>
-            </form>
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div className="text-left">
+            <label className="block text-[10px] uppercase font-bold tracking-wider text-muted-foreground mb-1.5">
+              Workspace Name
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Work, Engineering Team, Personal Notes"
+              value={newWorkspaceName}
+              onChange={(e) => setNewWorkspaceName(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-border bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary text-xs text-foreground transition-all placeholder:text-muted-foreground/60"
+              autoFocus
+            />
           </div>
-        </div>
-      )}
+
+          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-border/40">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(false)}
+              className="px-4 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground rounded-xl hover:bg-muted/40 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting || !newWorkspaceName.trim()}
+              className="px-4 py-2 text-xs font-semibold text-white bg-primary hover:bg-primary/95 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-md shadow-primary/10 flex items-center gap-1.5"
+            >
+              {isSubmitting ? "Creating..." : "Create Workspace"}
+            </button>
+          </div>
+        </form>
+      </AnimatedModal>
     </div>
   );
 };
