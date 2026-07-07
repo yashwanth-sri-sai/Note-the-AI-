@@ -67,6 +67,21 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({
           let icon = null;
           let labelColor = "text-muted-foreground/45";
           let circleColor = "border-white/10 bg-white/[0.01]";
+          let lineColor = "bg-white/[0.04]";
+
+          // Dedicated stage color resolver based on Step 9
+          const getStageColor = (label: string) => {
+            const l = label.toLowerCase();
+            if (l.includes("upload")) return { text: "text-[#4FD1C5]", bg: "bg-[#4FD1C5]/10", border: "border-[#4FD1C5]/30", shadow: "rgba(79,209,197,0.2)" };
+            if (l.includes("extract")) return { text: "text-[#53B7FF]", bg: "bg-[#53B7FF]/10", border: "border-[#53B7FF]/30", shadow: "rgba(83,183,255,0.2)" };
+            if (l.includes("chunk") || l.includes("knowledge") || l.includes("build")) return { text: "text-[#6D6BFF]", bg: "bg-[#6D6BFF]/10", border: "border-[#6D6BFF]/30", shadow: "rgba(109,107,255,0.2)" };
+            if (l.includes("embed")) return { text: "text-[#B48CFF]", bg: "bg-[#B48CFF]/10", border: "border-[#B48CFF]/30", shadow: "rgba(180,140,255,0.2)" };
+            if (l.includes("flashcard")) return { text: "text-[#B48CFF]", bg: "bg-[#B48CFF]/10", border: "border-[#B48CFF]/30", shadow: "rgba(180,140,255,0.2)" };
+            if (l.includes("quiz")) return { text: "text-[#5EE6A8]", bg: "bg-[#5EE6A8]/10", border: "border-[#5EE6A8]/30", shadow: "rgba(94,230,168,0.2)" };
+            return { text: "text-[#4FD1C5]", bg: "bg-[#4FD1C5]/10", border: "border-[#4FD1C5]/30", shadow: "rgba(79,209,197,0.2)" };
+          };
+
+          const stageColor = getStageColor(step.label);
 
           if (status === "completed") {
             icon = (
@@ -75,19 +90,22 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", stiffness: 300, damping: 15 }}
               >
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <CheckCircle2 className="h-4 w-4 text-[#5EE6A8]" />
               </motion.div>
             );
-            labelColor = "text-emerald-500/85 font-medium";
-            circleColor = "border-emerald-500/20 bg-emerald-500/5";
+            labelColor = "text-[#5EE6A8]/85 font-medium";
+            circleColor = "border-[#5EE6A8]/20 bg-[#5EE6A8]/5";
+            lineColor = "bg-[#5EE6A8]/30";
           } else if (status === "active") {
             icon = <Loader size="sm" />;
-            labelColor = "text-primary font-semibold";
-            circleColor = "border-primary bg-primary/10 shadow-[0_0_10px_rgba(93,124,255,0.2)]";
+            labelColor = `${stageColor.text} font-semibold`;
+            circleColor = `${stageColor.border} ${stageColor.bg}`;
+            lineColor = `${stageColor.bg}`;
           } else if (status === "failed") {
-            icon = <AlertCircle className="h-4 w-4 text-red-500" />;
-            labelColor = "text-red-500/85 font-medium";
-            circleColor = "border-red-500/20 bg-red-500/5";
+            icon = <AlertCircle className="h-4 w-4 text-[#FF6B81]" />;
+            labelColor = "text-[#FF6B81]/85 font-medium";
+            circleColor = "border-[#FF6B81]/20 bg-[#FF6B81]/5";
+            lineColor = "bg-[#FF6B81]/30";
           } else {
             // Pending
             icon = <Clock className="h-3 w-3 text-muted-foreground/30" />;
@@ -104,15 +122,14 @@ export const ProcessingTimeline: React.FC<ProcessingTimelineProps> = ({
               {/* Connecting Vertical line */}
               {!isLast && (
                 <div 
-                  className={`absolute left-3 top-6 w-[1.5px] -bottom-6 z-0 ${
-                    status === "completed" ? "bg-emerald-500/30" : "bg-white/[0.04]"
-                  }`}
+                  className={`absolute left-3 top-6 w-[1.5px] -bottom-6 z-0 ${lineColor}`}
                 />
               )}
 
               {/* Status Circle Icon */}
               <div 
                 className={`relative z-10 h-6.5 w-6.5 rounded-full flex items-center justify-center border transition-all duration-300 ${circleColor}`}
+                style={status === "active" ? { boxShadow: `0 0 10px ${stageColor.shadow}` } : undefined}
               >
                 {icon}
               </div>

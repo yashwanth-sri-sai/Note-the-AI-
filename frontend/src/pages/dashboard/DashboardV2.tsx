@@ -340,16 +340,16 @@ export const DashboardV2: React.FC = () => {
     };
 
     return (
-      <div className="flex flex-col justify-between h-full bg-sidebar/95">
+      <div className="flex flex-col justify-between h-full bg-gradient-to-b from-[#081018] via-[#101A2C] to-[#172338] border-r border-white/[0.03]">
         <div className="flex flex-col overflow-y-auto max-h-[calc(100vh-6rem)] flex-grow scrollbar">
           {/* Logo Brand */}
           <div className="h-14 flex items-center px-4.5 gap-2.5 border-b border-white/[0.03] shrink-0">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-tr from-primary to-indigo-500 text-white shadow-sm shrink-0">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 text-primary shadow-[0_0_10px_rgba(79,209,197,0.15)] shrink-0 animate-pulse">
               <BrainCircuit className="h-4.5 w-4.5" />
             </span>
             {(!collapsed || isMobileView) && (
-              <span className="font-semibold text-xs tracking-[0.05em] uppercase text-foreground/80">
-                NoteAI Workspace
+              <span className="font-bold text-[10px] tracking-widest uppercase text-foreground/80">
+                NoteAI OS
               </span>
             )}
           </div>
@@ -362,7 +362,7 @@ export const DashboardV2: React.FC = () => {
           )}
 
           {/* Nav Items */}
-          <nav className="p-3.5 space-y-0.5 flex-grow">
+          <nav className="p-3.5 space-y-1 flex-grow">
             {sidebarItems.map((item) => {
               const Icon = item.icon;
               const isActive = isItemActive(item);
@@ -377,14 +377,17 @@ export const DashboardV2: React.FC = () => {
                     }
                     if (isMobileView) setMobileSidebarOpen(false);
                   }}
-                  className={`relative flex items-center gap-2.5 w-full px-2.5 py-2 text-[11px] font-medium rounded-lg transition-all duration-150 group ${
+                  className={`relative flex items-center gap-2.5 w-full px-2.5 py-2 text-[11px] font-semibold rounded-xl transition-all duration-200 group ${
                     isActive
-                      ? "text-foreground bg-white/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.3)] border border-white/[0.02]"
-                      : "text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.02]"
+                      ? "text-primary bg-primary/8 shadow-[0_0_12px_rgba(79,209,197,0.12)] border border-primary/20"
+                      : "text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.03] hover:-translate-y-0.5"
                   }`}
                 >
+                  {isActive && (
+                    <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r bg-primary z-20" />
+                  )}
                   <span className="relative z-10 flex items-center gap-2.5 w-full">
-                    <Icon className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-102 duration-155 ${isActive ? "text-foreground" : item.color}`} />
+                    <Icon className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-102 duration-155 ${isActive ? "text-primary" : item.color}`} />
                     {(!collapsed || isMobileView) && <span>{item.label}</span>}
                   </span>
                 </button>
@@ -579,7 +582,7 @@ export const DashboardV2: React.FC = () => {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-3.5 border-t border-white/[0.03] space-y-3 shrink-0 bg-sidebar/40">
+        <div className="p-3.5 border-t border-white/[0.03] space-y-3 shrink-0 bg-transparent">
           {/* User Profile Card */}
           {(!collapsed || isMobileView) && (
             <div className="p-2 px-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] flex items-center justify-between gap-2.5">

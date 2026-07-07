@@ -294,20 +294,28 @@ export const QuizzesPage: React.FC = () => {
                     <p className="text-xs text-muted-foreground">No quizzes generated for this source yet.</p>
                   </div>
                 ) : (
-                  quizzes.map((q) => (
+                   quizzes.map((q) => (
                     <motion.div
                       key={q.id}
-                      whileHover={{ scale: 1.01, y: -1 }}
+                      whileHover={{ scale: 1.015, y: -2 }}
                       onClick={() => setActiveQuiz(q)}
-                      className="clay-card p-4.5 flex justify-between items-center cursor-pointer hover:border-rose/45 bg-card/65"
+                      className="relative overflow-hidden p-4.5 flex justify-between items-center cursor-pointer rounded-2xl bg-card/65 backdrop-blur-md border border-primary/20 shadow-[0_0_12px_rgba(79,209,197,0.04)] hover:border-primary/45 hover:shadow-[0_0_16px_rgba(79,209,197,0.08)] transition-all duration-300 group"
                     >
-                      <div>
-                        <h4 className="font-bold text-xs text-foreground">{q.title}</h4>
+                      {/* Subtle shimmer background decoration */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/[0.02] to-transparent -translate-x-full group-hover:animate-shimmer" />
+                      
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[8px] font-extrabold shadow-sm select-none">
+                            AI
+                          </span>
+                          <h4 className="font-extrabold text-xs text-foreground group-hover:text-primary transition-colors">{q.title}</h4>
+                        </div>
                         <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">
                           {q.questions.length} Questions • Generated on {new Date(q.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground/80" />
+                      <ChevronRight className="h-4 w-4 text-muted-foreground/80 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
                     </motion.div>
                   ))
                 )}

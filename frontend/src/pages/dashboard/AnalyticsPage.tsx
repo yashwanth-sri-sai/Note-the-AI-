@@ -196,15 +196,15 @@ export const AnalyticsPage: React.FC = () => {
                     </span>
                     <div className="flex items-center gap-4 text-[10px] font-bold">
                       <div className="flex items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-full bg-sky-400 dark:bg-sky-500 shadow-[0_1px_3px_rgba(56,189,248,0.3)]" />
+                        <span className="h-2.5 w-2.5 rounded-full bg-[#53B7FF] shadow-[0_0_8px_rgba(83,183,255,0.4)]" />
                         <span className="text-muted-foreground">Mean</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-full bg-indigo-500 shadow-[0_1px_3px_rgba(99,102,241,0.3)]" />
+                        <span className="h-2.5 w-2.5 rounded-full bg-[#6D6BFF] shadow-[0_0_8px_rgba(109,107,255,0.4)]" />
                         <span className="text-muted-foreground">P95</span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-full bg-rose-500 shadow-[0_1px_3px_rgba(244,63,94,0.3)]" />
+                        <span className="h-2.5 w-2.5 rounded-full bg-[#FF6B81] shadow-[0_0_8px_rgba(255,107,129,0.4)]" />
                         <span className="text-muted-foreground">P99</span>
                       </div>
                     </div>
@@ -230,7 +230,7 @@ export const AnalyticsPage: React.FC = () => {
                             initial={{ height: 0 }}
                             animate={{ height: `${(metrics.latency.retrieval.mean / maxVal) * 100}%` }}
                             transition={{ type: "spring", stiffness: 80, delay: 0.1 }}
-                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-sky-500 to-sky-350 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.4)] cursor-pointer hover:brightness-105"
+                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-[#53B7FF] to-[#53B7FF]/70 shadow-[0_0_8px_rgba(83,183,255,0.2)] cursor-pointer hover:brightness-105"
                           />
                         </div>
                         {/* P95 */}
@@ -242,7 +242,7 @@ export const AnalyticsPage: React.FC = () => {
                             initial={{ height: 0 }}
                             animate={{ height: `${(metrics.latency.retrieval.p95 / maxVal) * 100}%` }}
                             transition={{ type: "spring", stiffness: 80, delay: 0.2 }}
-                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-indigo-600 to-indigo-400 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3)] cursor-pointer hover:brightness-105"
+                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-[#6D6BFF] to-[#6D6BFF]/70 shadow-[0_0_8px_rgba(109,107,255,0.2)] cursor-pointer hover:brightness-105"
                           />
                         </div>
                         {/* P99 */}
@@ -254,7 +254,7 @@ export const AnalyticsPage: React.FC = () => {
                             initial={{ height: 0 }}
                             animate={{ height: `${(metrics.latency.retrieval.p99 / maxVal) * 100}%` }}
                             transition={{ type: "spring", stiffness: 80, delay: 0.3 }}
-                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-rose-500 to-rose-400 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3)] cursor-pointer hover:brightness-105"
+                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-[#FF6B81] to-[#FF6B81]/70 shadow-[0_0_8px_rgba(255,107,129,0.2)] cursor-pointer hover:brightness-105"
                           />
                         </div>
                       </div>
@@ -273,7 +273,7 @@ export const AnalyticsPage: React.FC = () => {
                             initial={{ height: 0 }}
                             animate={{ height: `${(metrics.latency.llm.mean / maxVal) * 100}%` }}
                             transition={{ type: "spring", stiffness: 80, delay: 0.2 }}
-                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-sky-500 to-sky-350 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.4)] cursor-pointer hover:brightness-105"
+                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-[#53B7FF] to-[#53B7FF]/70 shadow-[0_0_8px_rgba(83,183,255,0.2)] cursor-pointer hover:brightness-105"
                           />
                         </div>
                         {/* P95 */}
@@ -285,7 +285,7 @@ export const AnalyticsPage: React.FC = () => {
                             initial={{ height: 0 }}
                             animate={{ height: `${(metrics.latency.llm.p95 / maxVal) * 100}%` }}
                             transition={{ type: "spring", stiffness: 80, delay: 0.3 }}
-                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-indigo-600 to-indigo-400 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3)] cursor-pointer hover:brightness-105"
+                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-[#6D6BFF] to-[#6D6BFF]/70 shadow-[0_0_8px_rgba(109,107,255,0.2)] cursor-pointer hover:brightness-105"
                           />
                         </div>
                         {/* P99 */}
@@ -297,7 +297,7 @@ export const AnalyticsPage: React.FC = () => {
                             initial={{ height: 0 }}
                             animate={{ height: `${(metrics.latency.llm.p99 / maxVal) * 100}%` }}
                             transition={{ type: "spring", stiffness: 80, delay: 0.4 }}
-                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-rose-500 to-rose-400 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3)] cursor-pointer hover:brightness-105"
+                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-[#FF6B81] to-[#FF6B81]/70 shadow-[0_0_8px_rgba(255,107,129,0.2)] cursor-pointer hover:brightness-105"
                           />
                         </div>
                       </div>
@@ -316,7 +316,7 @@ export const AnalyticsPage: React.FC = () => {
                             initial={{ height: 0 }}
                             animate={{ height: `${(metrics.latency.total.mean / maxVal) * 100}%` }}
                             transition={{ type: "spring", stiffness: 80, delay: 0.3 }}
-                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-sky-500 to-sky-350 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.4)] cursor-pointer hover:brightness-105"
+                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-[#53B7FF] to-[#53B7FF]/70 shadow-[0_0_8px_rgba(83,183,255,0.2)] cursor-pointer hover:brightness-105"
                           />
                         </div>
                         {/* P95 */}
@@ -328,7 +328,7 @@ export const AnalyticsPage: React.FC = () => {
                             initial={{ height: 0 }}
                             animate={{ height: `${(metrics.latency.total.p95 / maxVal) * 100}%` }}
                             transition={{ type: "spring", stiffness: 80, delay: 0.4 }}
-                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-indigo-600 to-indigo-400 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3)] cursor-pointer hover:brightness-105"
+                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-[#6D6BFF] to-[#6D6BFF]/70 shadow-[0_0_8px_rgba(109,107,255,0.2)] cursor-pointer hover:brightness-105"
                           />
                         </div>
                         {/* P99 */}
@@ -340,7 +340,7 @@ export const AnalyticsPage: React.FC = () => {
                             initial={{ height: 0 }}
                             animate={{ height: `${(metrics.latency.total.p99 / maxVal) * 100}%` }}
                             transition={{ type: "spring", stiffness: 80, delay: 0.5 }}
-                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-rose-500 to-rose-400 shadow-[inset_1px_1px_2px_rgba(255,255,255,0.3)] cursor-pointer hover:brightness-105"
+                            className="w-3.5 sm:w-5 rounded-t-lg bg-gradient-to-t from-[#FF6B81] to-[#FF6B81]/70 shadow-[0_0_8px_rgba(255,107,129,0.2)] cursor-pointer hover:brightness-105"
                           />
                         </div>
                       </div>
@@ -415,7 +415,7 @@ export const AnalyticsPage: React.FC = () => {
                             initial={{ width: 0 }}
                             animate={{ width: `${pct}%` }}
                             transition={{ type: "spring", stiffness: 60, delay: 0.1 }}
-                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-[1px_0px_3px_rgba(0,0,0,0.1)]"
+                            className="h-full bg-gradient-to-r from-[#6D6BFF] to-[#B48CFF] rounded-full shadow-[0_0_8px_rgba(109,107,255,0.3)]"
                           />
                         </div>
                       </div>

@@ -352,12 +352,17 @@ export const FlashcardsPage: React.FC = () => {
                   >
                     {/* Front of Card */}
                     <div 
-                      className="absolute inset-0 w-full h-full rounded-3xl p-8 flex flex-col justify-center items-center text-center border border-border/40 clay-card bg-card/85 shadow-lg"
+                      className="absolute inset-0 w-full h-full rounded-3xl p-8 flex flex-col justify-center items-center text-center border border-primary/20 bg-card/75 shadow-[0_0_15px_rgba(79,209,197,0.06)] hover:border-primary/45 transition-all duration-300"
                       style={{ backfaceVisibility: "hidden" }}
                     >
-                      <span className="absolute top-4 left-4 p-1.5 rounded-lg bg-violet/10 text-violet text-[9px] font-extrabold uppercase tracking-wider">
-                        Question
-                      </span>
+                      <div className="absolute top-4 left-4 flex items-center gap-1.5 select-none">
+                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[8px] font-extrabold shadow-sm">
+                          AI
+                        </span>
+                        <span className="p-1 px-1.5 rounded-lg bg-violet/10 text-violet text-[9px] font-extrabold uppercase tracking-wider">
+                          Question
+                        </span>
+                      </div>
                       <p className="font-extrabold text-sm text-foreground max-w-md leading-relaxed">
                         {flashcards[currentIndex].question}
                       </p>
@@ -368,15 +373,20 @@ export const FlashcardsPage: React.FC = () => {
 
                     {/* Back of Card */}
                     <div 
-                      className="absolute inset-0 w-full h-full rounded-3xl p-8 flex flex-col justify-center items-center text-center border border-border/40 clay-card bg-card/90 shadow-lg"
+                      className="absolute inset-0 w-full h-full rounded-3xl p-8 flex flex-col justify-center items-center text-center border border-emerald-500/20 bg-card/75 shadow-[0_0_15px_rgba(94,230,168,0.06)] hover:border-emerald-500/40 transition-all duration-300"
                       style={{ 
                         backfaceVisibility: "hidden", 
                         transform: "rotateY(180deg)" 
                       }}
                     >
-                      <span className="absolute top-4 left-4 p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 text-[9px] font-extrabold uppercase tracking-wider">
-                        Answer
-                      </span>
+                      <div className="absolute top-4 left-4 flex items-center gap-1.5 select-none">
+                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[8px] font-extrabold shadow-sm">
+                          AI
+                        </span>
+                        <span className="p-1 px-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 text-[9px] font-extrabold uppercase tracking-wider">
+                          Answer
+                        </span>
+                      </div>
                       <p className="font-bold text-xs text-foreground max-w-md leading-relaxed whitespace-pre-wrap">
                         {flashcards[currentIndex].answer}
                       </p>

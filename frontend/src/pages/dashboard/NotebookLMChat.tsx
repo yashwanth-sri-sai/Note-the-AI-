@@ -966,12 +966,23 @@ export const NotebookLMChat: React.FC = () => {
                     <div className="space-y-2 max-w-[85%]">
                       {/* Message Bubble Box */}
                       <div
-                        className={`rounded-2xl p-4 border transition-all ${
+                        className={`rounded-2xl p-4 border transition-all duration-300 ${
                           isUser
                             ? "bg-gradient-to-tr from-primary to-indigo-600 text-white border-primary/20 shadow-md shadow-primary/25"
-                            : "bg-card/75 border-border/40 shadow-sm"
+                            : "bg-card/65 backdrop-blur-md border-primary/25 shadow-[0_0_12px_rgba(79,209,197,0.05)] hover:border-primary/45 hover:shadow-[0_0_16px_rgba(79,209,197,0.1)]"
                         }`}
                       >
+                        {/* AI Header Badge for assistant message */}
+                        {!isUser && (
+                          <div className="flex items-center gap-2 pb-2 mb-2.5 border-b border-white/[0.04] text-[9px] font-bold text-muted-foreground uppercase tracking-widest select-none">
+                            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-primary/10 border border-primary/20 text-primary text-[8px] font-extrabold shadow-sm tracking-normal">
+                              AI
+                            </span>
+                            <span className="bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
+                              Synthesis Response
+                            </span>
+                          </div>
+                        )}
                         {/* Message content parsed with bracket citations */}
                         {isUser ? (
                           <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
