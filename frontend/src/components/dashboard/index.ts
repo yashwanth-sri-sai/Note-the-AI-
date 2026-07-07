@@ -6,3 +6,8 @@ export { QuickActionCard } from "./QuickActionCard";
 export { AIStatusPanel } from "./AIStatusPanel";
 export { ActivityTimeline } from "./ActivityTimeline";
 export { DashboardCharts } from "./DashboardCharts";
+export { ContinueLearningCard } from "./ContinueLearningCard";
+export { AIInsightCard } from "./AIInsightCard";
+export { KnowledgeCard } from "./KnowledgeCard";
+export type { ContinueLearningType } from "./ContinueLearningCard";
+export type { InsightVariant } from "./AIInsightCard";

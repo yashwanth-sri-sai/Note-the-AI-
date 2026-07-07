@@ -1,7 +1,6 @@
 import React, { useMemo } from "react";
 import { motion } from "framer-motion";
-import { FileText, FolderPlus, MessageSquare, StickyNote, CalendarRange } from "lucide-react";
-import { DashboardCard } from "./DashboardCard";
+import { FileText, FolderPlus, MessageSquare, StickyNote, BookOpen } from "lucide-react";
 
 interface NoteItem {
   id: string;
@@ -45,20 +44,59 @@ interface TimelineItem {
 
 const timeAgo = (date: Date): string => {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-  if (seconds < 10) return "Just now";
-  if (seconds < 60) return `${seconds}s ago`;
-  
+  if (seconds < 60) return "Just now";
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  
+  if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  
   const days = Math.floor(hours / 24);
   if (days === 1) return "Yesterday";
-  if (days < 7) return `${days}d ago`;
-  
+  if (days < 7) return `${days} days ago`;
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+};
+
+const typeConfig = {
+  note: {
+    icon: <StickyNote className="h-3.5 w-3.5" />,
+    color: "text-sky-400",
+    bg: "bg-sky-500/10",
+    border: "border-sky-500/25",
+    dot: "bg-sky-500",
+    line: "bg-sky-500/20",
+  },
+  document: {
+    icon: <FileText className="h-3.5 w-3.5" />,
+    color: "text-emerald-400",
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-500/25",
+    dot: "bg-emerald-500",
+    line: "bg-emerald-500/20",
+  },
+  folder: {
+    icon: <FolderPlus className="h-3.5 w-3.5" />,
+    color: "text-amber-400",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/25",
+    dot: "bg-amber-500",
+    line: "bg-amber-500/20",
+  },
+  chat: {
+    icon: <MessageSquare className="h-3.5 w-3.5" />,
+    color: "text-purple-400",
+    bg: "bg-purple-500/10",
+    border: "border-purple-500/25",
+    dot: "bg-purple-500",
+    line: "bg-purple-500/20",
+  },
+};
+
+const itemVariants = {
+  initial: { opacity: 0, x: -12 },
+  animate: {
+    opacity: 1,
+    x: 0,
+    transition: { type: "spring", stiffness: 160, damping: 18 },
+  },
 };
 
 export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
@@ -67,13 +105,13 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
   folders = [],
   conversations = [],
 }) => {
-  const shouldReduceMotion = typeof window !== "undefined" && 
+  const shouldReduceMotion =
+    typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const timelineItems = useMemo<TimelineItem[]>(() => {
     const items: TimelineItem[] = [];
 
-    // 1. Process Notes
     notes.forEach((note) => {
       items.push({
         id: `note-${note.id}`,
@@ -82,33 +120,29 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
         detail: note.title || "Untitled Note",
         date: new Date(note.created_at),
       });
-      
-      // If note has been modified substantially after creation, record modification
       const createTime = new Date(note.created_at).getTime();
       const updateTime = new Date(note.updated_at).getTime();
-      if (updateTime - createTime > 120000) { // > 2 minutes difference
+      if (updateTime - createTime > 120000) {
         items.push({
           id: `note-mod-${note.id}-${note.updated_at}`,
           type: "note",
-          label: "Modified Note",
+          label: "Updated Note",
           detail: note.title || "Untitled Note",
           date: new Date(note.updated_at),
         });
       }
     });
 
-    // 2. Process Documents
     documents.forEach((doc) => {
       items.push({
         id: `doc-${doc.id}`,
         type: "document",
-        label: "Uploaded Knowledge",
+        label: "Uploaded Document",
         detail: doc.filename,
         date: new Date(doc.created_at),
       });
     });
 
-    // 3. Process Folders
     folders.forEach((folder) => {
       items.push({
         id: `folder-${folder.id}`,
@@ -119,117 +153,82 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
       });
     });
 
-    // 4. Process Conversations
     conversations.forEach((chat) => {
       items.push({
         id: `chat-${chat.id}`,
         type: "chat",
-        label: "Started AI Chat Session",
-        detail: chat.title || "RAG Context Query",
+        label: "Started AI Chat",
+        detail: chat.title || "RAG Session",
         date: new Date(chat.created_at),
       });
     });
 
-    // Sort items by date descending, take top 5
-    return items.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 5);
+    return items.sort((a, b) => b.date.getTime() - a.date.getTime()).slice(0, 7);
   }, [notes, documents, folders, conversations]);
 
-  const containerVariants = {
-    initial: {},
-    animate: {
-      transition: { staggerChildren: 0.08 },
-    },
-  };
-
-  const itemVariants = {
-    initial: { opacity: 0, x: -10 },
-    animate: { 
-      opacity: 1, 
-      x: 0,
-      transition: { type: "spring", stiffness: 150, damping: 16 }
-    },
-  };
-
-  const getTimelineIcon = (type: "note" | "document" | "folder" | "chat") => {
-    switch (type) {
-      case "note":
-        return <StickyNote className="h-3.5 w-3.5 text-sky-500" />;
-      case "document":
-        return <FileText className="h-3.5 w-3.5 text-emerald-500" />;
-      case "folder":
-        return <FolderPlus className="h-3.5 w-3.5 text-rose-500" />;
-      case "chat":
-        return <MessageSquare className="h-3.5 w-3.5 text-amber-500" />;
-    }
-  };
-
-  const getTimelineColor = (type: "note" | "document" | "folder" | "chat") => {
-    switch (type) {
-      case "note": return "border-sky-500/25 bg-sky-500/10";
-      case "document": return "border-emerald-500/25 bg-emerald-500/10";
-      case "folder": return "border-rose-500/25 bg-rose-500/10";
-      case "chat": return "border-amber-500/25 bg-amber-500/10";
-    }
-  };
+  if (timelineItems.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/[0.05] bg-white/[0.015] p-8 text-center space-y-3">
+        <BookOpen className="h-8 w-8 text-muted-foreground/30 mx-auto" aria-hidden="true" />
+        <p className="text-sm font-bold text-foreground/50">Your learning journey starts here</p>
+        <p className="text-[10px] text-muted-foreground/40 max-w-xs mx-auto leading-relaxed">
+          Upload your first document and let AI build summaries, flashcards, quizzes, and study notes.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4 text-left">
-      <div className="flex justify-between items-center px-1">
-        <h2 className="text-xs font-bold uppercase text-muted-foreground/60 tracking-wider flex items-center gap-2">
-          <CalendarRange className="h-4 w-4 text-primary" /> Workspace Activity Log
-        </h2>
-      </div>
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="relative flex flex-col"
+      aria-label="Recent activity timeline"
+    >
+      {timelineItems.map((item, index) => {
+        const cfg = typeConfig[item.type];
+        const isLast = index === timelineItems.length - 1;
 
-      <DashboardCard className="bg-white/[0.01] border border-white/[0.03] rounded-2xl p-5">
-        {timelineItems.length === 0 ? (
-          <div className="text-center py-6 text-xs text-muted-foreground/45">
-            No activity logged in this workspace yet. Write notes or index files to populate.
-          </div>
-        ) : (
+        return (
           <motion.div
-            variants={shouldReduceMotion ? {} : containerVariants}
+            key={item.id}
+            variants={shouldReduceMotion ? {} : itemVariants}
             initial="initial"
             animate="animate"
-            className="relative flex flex-col gap-6 pl-2"
+            transition={{ delay: index * 0.06 }}
+            className="relative flex items-start gap-4 pb-5"
           >
-            {timelineItems.map((item, index) => {
-              const isLast = index === timelineItems.length - 1;
-              return (
-                <motion.div
-                  key={item.id}
-                  variants={shouldReduceMotion ? {} : itemVariants}
-                  className="flex items-start gap-4 relative"
-                >
-                  {/* Connecting Line */}
-                  {!isLast && (
-                    <div className="absolute left-3.5 top-7 w-[1.5px] -bottom-7 bg-white/[0.03] z-0" />
-                  )}
+            {/* Vertical connector line */}
+            {!isLast && (
+              <div className={`absolute left-[14px] top-8 w-[1.5px] bottom-0 ${cfg.line} z-0`} />
+            )}
 
-                  {/* Circular Node */}
-                  <div className={`relative z-10 h-7 w-7 rounded-full flex items-center justify-center border shrink-0 ${getTimelineColor(item.type)}`}>
-                    {getTimelineIcon(item.type)}
-                  </div>
+            {/* Node icon */}
+            <div
+              className={`relative z-10 shrink-0 flex h-7 w-7 items-center justify-center rounded-full border ${cfg.bg} ${cfg.border} ${cfg.color}`}
+              aria-hidden="true"
+            >
+              {cfg.icon}
+            </div>
 
-                  {/* Activity Details */}
-                  <div className="flex-grow pt-0.5 min-w-0">
-                    <div className="flex items-center justify-between gap-4">
-                      <span className="text-[11px] font-bold text-foreground/80 leading-none">
-                        {item.label}
-                      </span>
-                      <span className="text-[9px] text-muted-foreground/40 font-mono shrink-0">
-                        {timeAgo(item.date)}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1 truncate max-w-full">
-                      {item.detail}
-                    </p>
-                  </div>
-                </motion.div>
-              );
-            })}
+            {/* Content */}
+            <div className="flex-1 min-w-0 pt-0.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11.5px] font-bold text-foreground/80 leading-none">
+                  {item.label}
+                </span>
+                <span className="text-[9px] text-muted-foreground/40 font-mono shrink-0 tabular-nums">
+                  {timeAgo(item.date)}
+                </span>
+              </div>
+              <p className="text-[10px] text-muted-foreground/55 mt-1 truncate max-w-full">
+                {item.detail}
+              </p>
+            </div>
           </motion.div>
-        )}
-      </DashboardCard>
-    </div>
+        );
+      })}
+    </motion.div>
   );
 };
