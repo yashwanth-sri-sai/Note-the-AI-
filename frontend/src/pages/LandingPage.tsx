@@ -3,11 +3,11 @@ import { Link, useNavigate } from "react-router-dom";
 import { BrainCircuit, BookOpen, Tag, Star, ArrowRight, Sparkles, FolderKanban } from "lucide-react";
 import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export const LandingPage: React.FC = () => {
   const { isAuthenticated } = useAuthStore();
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useUIStore();
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
@@ -26,13 +26,7 @@ export const LandingPage: React.FC = () => {
           </div>
 
           <nav className="flex items-center gap-6">
-            <button
-              onClick={toggleTheme}
-              className="rounded-lg p-2 hover:bg-muted text-muted-foreground transition-colors"
-              aria-label="Toggle theme"
-            >
-              {theme === "dark" ? "☀️" : "🌙"}
-            </button>
+            <ThemeToggle compact />
 
             {isAuthenticated ? (
               <button

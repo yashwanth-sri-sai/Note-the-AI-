@@ -4,74 +4,98 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── LIGHT MODE (default :root) ──────────────────────────────────────────── */
 @layer base {
   :root {
-    --background: 210 50% 6.3%; /* #081018 */
-    --foreground: 210 27.3% 97.1%; /* #F5F7FA */
+    /* Page canvas — cream paper, not white */
+    --background: 213 33% 97%;         /* #F7F9FC */
+    --foreground: 216 43% 14%;         /* #142033 */
 
-    --surface: 218 47% 11.8%; /* #101A2C */
-    --surface-secondary: 216 41% 15.5%; /* #172338 */
-    --sidebar: 218 47% 11.8%; /* #101A2C */
+    /* Surface layers */
+    --surface: 0 0% 100%;              /* #FFFFFF */
+    --surface-secondary: 216 30% 95%; /* #F2F5FA */
+    --sidebar: 216 30% 95%;           /* #F2F5FA */
 
-    --card: 217 40% 18.8%; /* #1D2B43 */
-    --card-foreground: 210 27.3% 97.1%; /* #F5F7FA */
+    /* Card */
+    --card: 0 0% 100%;                 /* #FFFFFF */
+    --card-foreground: 216 43% 14%;   /* #142033 */
 
-    --popover: 217 40% 18.8%; /* #1D2B43 */
-    --popover-foreground: 210 27.3% 97.1%; /* #F5F7FA */
+    /* Popover */
+    --popover: 0 0% 100%;
+    --popover-foreground: 216 43% 14%;
 
-    --primary: 174 59% 56.5%; /* #4FD1C5 */
+    /* Aurora brand colors — unchanged in both themes */
+    --primary: 174 59% 56.5%;         /* #4FD1C5  Knowledge Cyan */
     --primary-hover: 174 59% 49%;
-    --primary-foreground: 210 50% 6.3%;
+    --primary-foreground: 216 43% 14%;
 
-    --secondary: 216 41% 15.5%; /* #172338 */
-    --secondary-foreground: 218 17.6% 70.8%; /* #A7B1C2 */
+    /* Secondary */
+    --secondary: 216 30% 95%;
+    --secondary-foreground: 215 21% 36%;  /* #46546A */
 
-    --muted: 218 47% 11.8%; /* #101A2C */
-    --muted-foreground: 218 10.9% 53.1%; /* #7B8494 */
+    /* Muted */
+    --muted: 216 25% 92%;
+    --muted-foreground: 215 14% 44%;   /* #718096 */
 
-    --accent: 216 41% 15.5%; /* #172338 */
-    --accent-foreground: 210 27.3% 97.1%; /* #F5F7FA */
+    /* Accent */
+    --accent: 216 30% 95%;
+    --accent-foreground: 216 43% 14%;
 
-    --destructive: 351 100% 71%; /* #FF6B81 */
-    --destructive-foreground: 210 27.3% 97.1%; /* #F5F7FA */
+    /* Destructive */
+    --destructive: 351 100% 71%;       /* #FF6B81 */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 216 41% 15.5%; /* #172338 */
-    --input: 216 41% 15.5%; /* #172338 */
-    --ring: 174 59% 56.5%; /* #4FD1C5 */
+    /* Border & Input */
+    --border: 215 20% 87%;             /* soft slate, ~rgba(20,32,51,0.10) */
+    --input: 215 20% 87%;
+    --ring: 174 59% 56.5%;
 
     --radius: 0.75rem;
 
-    /* Custom Palette Tokens */
-    --emerald: 174 59% 56.5%; /* Knowledge */
-    --amber: 261 100% 77.5%; /* Memory */
-    --violet: 261 100% 77.5%; /* Memory */
-    --rose: 351 100% 71%; /* Danger */
-    --cyan: 174 59% 56.5%; /* Knowledge */
+    /* Semantic palette tokens */
+    --emerald: 157 69% 58%;            /* #5EE6A8 Success */
+    --amber: 42 90% 64.3%;            /* #F6C453 Warning */
+    --violet: 261 100% 77.5%;         /* #B48CFF Memory Lavender */
+    --rose: 351 100% 71%;             /* #FF6B81 Danger */
+    --cyan: 174 59% 56.5%;            /* #4FD1C5 Knowledge Cyan */
 
-    --primary-text: 210 27.3% 97.1%; /* #F5F7FA */
-    --secondary-text: 218 17.6% 70.8%; /* #A7B1C2 */
-    --muted-text: 218 10.9% 53.1%; /* #7B8494 */
+    --primary-text: 216 43% 14%;
+    --secondary-text: 215 21% 36%;
+    --muted-text: 215 14% 44%;
 
-    --success: 153 73% 63.5%; /* #5EE6A8 */
-    --warning: 42 90% 64.3%; /* #F6C453 */
-    --error: 351 100% 71%; /* #FF6B81 */
-    --info: 205 100% 66.3%; /* Focus */
+    --success: 157 69% 58%;
+    --warning: 42 90% 64.3%;
+    --error: 351 100% 71%;
+    --info: 205 100% 66.3%;
+
+    /* Light-mode glass tokens */
+    --glass-bg: rgba(255, 255, 255, 0.80);
+    --glass-border: rgba(20, 32, 51, 0.10);
+    --clay-bg: rgba(255, 255, 255, 0.95);
+    --clay-border: rgba(20, 32, 51, 0.08);
+    --clay-shadow: 0 2px 16px rgba(20, 32, 51, 0.08), 0 1px 0 rgba(20,32,51,0.04) inset;
   }
 
+  /* ─── DARK MODE ─────────────────────────────────────────────────────────── */
   .dark {
-    --background: 210 50% 6.3%;
-    --foreground: 210 27.3% 97.1%;
+    /* Page canvas — deep space */
+    --background: 210 50% 6.3%;       /* #081018 */
+    --foreground: 210 27.3% 97.1%;    /* #F5F7FA */
 
-    --surface: 218 47% 11.8%;
-    --surface-secondary: 216 41% 15.5%;
+    /* Surface layers */
+    --surface: 218 47% 11.8%;         /* #101A2C */
+    --surface-secondary: 216 41% 15.5%; /* #172338 */
     --sidebar: 218 47% 11.8%;
 
-    --card: 217 40% 18.8%;
+    /* Card */
+    --card: 217 40% 18.8%;            /* #1D2B43 */
     --card-foreground: 210 27.3% 97.1%;
 
+    /* Popover */
     --popover: 217 40% 18.8%;
     --popover-foreground: 210 27.3% 97.1%;
 
+    /* Aurora brand colors — same as light */
     --primary: 174 59% 56.5%;
     --primary-hover: 174 59% 49%;
     --primary-foreground: 210 50% 6.3%;
@@ -91,19 +115,52 @@
     --border: 216 41% 15.5%;
     --input: 216 41% 15.5%;
     --ring: 174 59% 56.5%;
+
+    /* Dark-mode glass tokens */
+    --glass-bg: rgba(22, 34, 56, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --clay-bg: rgba(22, 34, 56, 0.75);
+    --clay-border: rgba(255, 255, 255, 0.08);
+    --clay-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
   }
 }
 
+/* ─── BASE STYLES ────────────────────────────────────────────────────────── */
 @layer base {
   * {
     border-color: hsl(var(--border));
   }
+
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
     font-family: "Inter", sans-serif;
     overflow-x: hidden;
+    /* Smooth theme transitions — no flash */
+    transition:
+      background-color 0.25s ease,
+      color 0.2s ease;
   }
+
+  /* Transition all color-bearing properties on theme switch */
+  *,
+  *::before,
+  *::after {
+    transition:
+      background-color 0.25s ease,
+      border-color 0.25s ease,
+      color 0.2s ease,
+      box-shadow 0.25s ease;
+  }
+
+  /* Suppress transition on elements that should not animate (performance) */
+  img,
+  video,
+  canvas,
+  svg {
+    transition: none;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     font-family: "Poppins", sans-serif;
   }
@@ -112,203 +169,190 @@
   }
 }
 
-/* Glassmorphism Panel helper - Aurora Knowledge Standard */
+/* ─── GLASS / CLAY UTILITIES — now fully theme-aware ────────────────────── */
 .glass-panel {
-  background: rgba(22, 34, 56, 0.75);
+  background: var(--glass-bg);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-radius: 16px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--clay-shadow);
+  border: 1px solid var(--glass-border);
 }
 
-.dark .glass-panel {
-  background: rgba(22, 34, 56, 0.75);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+.clay-panel,
+.clay-card {
+  background: var(--clay-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 16px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-/* Custom premium scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.2);
-  border-radius: 9999px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.4);
-}
-
-/* Claymorphic Design Utilities - Upgraded to Aurora Knowledge Glassmorphism */
-.clay-panel, .clay-card {
-  background: rgba(22, 34, 56, 0.75);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--clay-shadow);
+  border: 1px solid var(--clay-border);
+  transition:
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.25s ease,
+    background-color 0.25s ease;
 }
 
 .clay-card:hover {
   transform: translateY(-2.5px);
-  box-shadow: 0 12px 28px 0 rgba(0, 0, 0, 0.25);
-  border-color: rgba(79, 209, 197, 0.35); /* Knowledge Cyan accent */
-}
-
-.dark .clay-panel, .dark .clay-card {
-  background: rgba(22, 34, 56, 0.75);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.dark .clay-card:hover {
   border-color: rgba(79, 209, 197, 0.35);
 }
 
-/* Premium Aurora Button System */
+/* Light-mode clay card — soft elevation, no frost */
+:root .clay-card:hover,
+:root .clay-panel:hover {
+  box-shadow: 0 8px 28px rgba(20, 32, 51, 0.12);
+}
+
+/* Dark-mode clay card — deeper shadow */
+.dark .clay-card:hover {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.30);
+  border-color: rgba(79, 209, 197, 0.35);
+}
+
+/* ─── BUTTON SYSTEM ──────────────────────────────────────────────────────── */
 .clay-btn {
   background: transparent;
   color: hsl(var(--foreground));
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--clay-border);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-
 .clay-btn:hover {
   transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 255, 255, 0.15);
+  background: hsl(var(--surface-secondary));
 }
-
 .clay-btn:active {
   transform: scale(0.98);
 }
 
 .clay-btn-primary {
-  background: rgba(79, 209, 197, 0.9); /* Knowledge Cyan */
-  color: #081018; /* Deep Space text */
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
   border-radius: 10px;
-  box-shadow: 0 0 15px rgba(79, 209, 197, 0.25);
-  border: 1px solid rgba(79, 209, 197, 0.4);
+  border: 1px solid hsl(var(--primary) / 0.4);
   font-weight: 600;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-
+.dark .clay-btn-primary {
+  box-shadow: 0 0 15px hsl(var(--primary) / 0.25);
+}
 .clay-btn-primary:hover {
   transform: translateY(-1.5px);
-  background: rgba(79, 209, 197, 1);
-  box-shadow: 0 0 22px rgba(79, 209, 197, 0.45);
+  filter: brightness(1.08);
 }
-
+.dark .clay-btn-primary:hover {
+  box-shadow: 0 0 22px hsl(var(--primary) / 0.45);
+}
 .clay-btn-primary:active {
   transform: scale(0.98);
 }
 
-/* Glass inputs with Knowledge focus glow */
+/* ─── INPUT SYSTEM ───────────────────────────────────────────────────────── */
 .clay-input {
-  background: rgba(22, 34, 56, 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: hsl(var(--surface-secondary));
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--clay-border);
   color: hsl(var(--foreground));
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-
+.dark .clay-input {
+  background: rgba(22, 34, 56, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
 .clay-input::placeholder {
   color: hsl(var(--muted-foreground) / 0.5);
 }
-
 .clay-input:focus {
-  background: rgba(22, 34, 56, 0.7);
-  box-shadow: 0 0 15px rgba(79, 209, 197, 0.15);
-  border-color: rgba(79, 209, 197, 0.5); /* Knowledge Accent border */
+  background: hsl(var(--surface));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.20);
+  border-color: hsl(var(--primary) / 0.5);
   outline: none;
 }
-
-.dark .clay-input {
-  background: rgba(22, 34, 56, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
 .dark .clay-input:focus {
   background: rgba(22, 34, 56, 0.7);
-  box-shadow: 0 0 15px rgba(79, 209, 197, 0.15);
-  border-color: rgba(79, 209, 197, 0.5);
+  box-shadow: 0 0 15px hsl(var(--primary) / 0.15);
+  border-color: hsl(var(--primary) / 0.5);
 }
 
-/* Custom Colorful Cards for Aurora */
+/* ─── COLORFUL CARD VARIANTS ─────────────────────────────────────────────── */
 .clay-card-indigo, .clay-card-blue {
-  background: rgba(22, 34, 56, 0.75);
-  border: 1px solid rgba(109, 107, 255, 0.18); /* Insight */
+  background: var(--clay-bg);
+  border: 1px solid rgba(109, 107, 255, 0.18);
+}
+:root .clay-card-indigo, :root .clay-card-blue {
+  background: rgba(109, 107, 255, 0.05);
 }
 .clay-card-indigo:hover, .clay-card-blue:hover {
   border-color: rgba(109, 107, 255, 0.4);
 }
 
 .clay-card-emerald {
-  background: rgba(22, 34, 56, 0.75);
-  border: 1px solid rgba(79, 209, 197, 0.18); /* Knowledge */
+  background: var(--clay-bg);
+  border: 1px solid rgba(79, 209, 197, 0.18);
 }
-.clay-card-emerald:hover {
-  border-color: rgba(79, 209, 197, 0.4);
-}
+:root .clay-card-emerald { background: rgba(79, 209, 197, 0.05); }
+.clay-card-emerald:hover { border-color: rgba(79, 209, 197, 0.4); }
 
 .clay-card-amber {
-  background: rgba(22, 34, 56, 0.75);
-  border: 1px solid rgba(246, 196, 83, 0.18); /* Warning */
+  background: var(--clay-bg);
+  border: 1px solid rgba(246, 196, 83, 0.18);
 }
-.clay-card-amber:hover {
-  border-color: rgba(246, 196, 83, 0.4);
-}
+:root .clay-card-amber { background: rgba(246, 196, 83, 0.05); }
+.clay-card-amber:hover { border-color: rgba(246, 196, 83, 0.4); }
 
 .clay-card-violet, .clay-card-purple {
-  background: rgba(22, 34, 56, 0.75);
-  border: 1px solid rgba(180, 140, 255, 0.18); /* Memory */
+  background: var(--clay-bg);
+  border: 1px solid rgba(180, 140, 255, 0.18);
 }
-.clay-card-violet:hover, .clay-card-purple:hover {
-  border-color: rgba(180, 140, 255, 0.4);
+:root .clay-card-violet, :root .clay-card-purple {
+  background: rgba(180, 140, 255, 0.05);
 }
+.clay-card-violet:hover, .clay-card-purple:hover { border-color: rgba(180, 140, 255, 0.4); }
 
 .clay-card-rose, .clay-card-pink {
-  background: rgba(22, 34, 56, 0.75);
-  border: 1px solid rgba(255, 107, 129, 0.18); /* Danger */
+  background: var(--clay-bg);
+  border: 1px solid rgba(255, 107, 129, 0.18);
 }
-.clay-card-rose:hover, .clay-card-pink:hover {
-  border-color: rgba(255, 107, 129, 0.4);
+:root .clay-card-rose, :root .clay-card-pink {
+  background: rgba(255, 107, 129, 0.05);
 }
+.clay-card-rose:hover, .clay-card-pink:hover { border-color: rgba(255, 107, 129, 0.4); }
 
 .clay-card-sky, .clay-card-cyan {
-  background: rgba(22, 34, 56, 0.75);
-  border: 1px solid rgba(83, 183, 255, 0.18); /* Focus */
+  background: var(--clay-bg);
+  border: 1px solid rgba(83, 183, 255, 0.18);
 }
-.clay-card-sky:hover, .clay-card-cyan:hover {
-  border-color: rgba(83, 183, 255, 0.4);
+:root .clay-card-sky, :root .clay-card-cyan {
+  background: rgba(83, 183, 255, 0.05);
+}
+.clay-card-sky:hover, .clay-card-cyan:hover { border-color: rgba(83, 183, 255, 0.4); }
+
+/* ─── SCROLLBAR ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.4);
 }
 
-.dark .clay-card-indigo, .dark .clay-card-blue,
-.dark .clay-card-emerald, .dark .clay-card-amber,
-.dark .clay-card-violet, .dark .clay-card-purple,
-.dark .clay-card-rose, .dark .clay-card-pink,
-.dark .clay-card-sky, .dark .clay-card-cyan {
-  background: rgba(22, 34, 56, 0.75);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+/* ─── SIDEBAR LIGHT MODE ─────────────────────────────────────────────────── */
+:root .sidebar-surface {
+  background: hsl(var(--surface-secondary));
+  border-right: 1px solid hsl(var(--border));
+}
+.dark .sidebar-surface {
+  background: hsl(var(--sidebar));
+  border-right: 1px solid hsl(var(--border));
 }
 
-/* Slide Drawer Animation */
+/* ─── ANIMATION UTILITIES ────────────────────────────────────────────────── */
 @keyframes slideInRight {
   from { transform: translateX(100%); }
   to { transform: translateX(0); }
@@ -317,62 +361,51 @@
   animation: slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Subtle animated shimmer transition utility */
 @keyframes shimmer {
-  100% {
-    transform: translateX(100%);
-  }
+  100% { transform: translateX(100%); }
 }
-.animate-shimmer {
-  animation: shimmer 1.8s infinite;
-}
+.animate-shimmer { animation: shimmer 1.8s infinite; }
 
-/* Custom premium transitions */
+/* ─── SPRING HOVER ───────────────────────────────────────────────────────── */
 .spring-hover {
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.spring-hover:hover {
-  transform: scale(1.02) translateY(-2px);
-}
-.spring-hover:active {
-  transform: scale(0.98) translateY(0);
-}
+.spring-hover:hover { transform: scale(1.02) translateY(-2px); }
+.spring-hover:active { transform: scale(0.98) translateY(0); }
 
-/* Custom CSS Loader */
+/* ─── LOADER ─────────────────────────────────────────────────────────────── */
 .loader {
   display: inline-flex;
   gap: 10px;
   --loader-size: 20px;
 }
-.loader-sm {
-  --loader-size: 12px;
-  gap: 5px;
-}
-.loader-md {
-  --loader-size: 20px;
-  gap: 10px;
-}
-.loader-lg {
-  --loader-size: 32px;
-  gap: 15px;
-}
-.loader:before,
-.loader:after {
+.loader-sm { --loader-size: 12px; gap: 5px; }
+.loader-md { --loader-size: 20px; gap: 10px; }
+.loader-lg { --loader-size: 32px; gap: 15px; }
+.loader:before, .loader:after {
   content: "";
   height: var(--loader-size);
   aspect-ratio: 1;
   border-radius: 50%;
   background:
     linear-gradient(#222 0 0) top/100% 40% no-repeat,
-    radial-gradient(farthest-side,#000 95%,#0000) 50%/8px 8px no-repeat
+    radial-gradient(farthest-side, #000 95%, #0000) 50%/8px 8px no-repeat
     #fff;
   animation: l7 1.5s infinite alternate ease-in;
 }
 @keyframes l7 {
-  0%,
-  70% {background-size:100% 40%,8px 8px}
-  85% {background-size:100% 120%,8px 8px}
-  100% {background-size:100% 40%,8px 8px}
+  0%, 70% { background-size: 100% 40%, 8px 8px; }
+  85% { background-size: 100% 120%, 8px 8px; }
+  100% { background-size: 100% 40%, 8px 8px; }
 }
 
-
+/* ─── REDUCED MOTION ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

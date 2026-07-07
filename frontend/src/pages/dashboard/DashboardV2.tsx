@@ -29,6 +29,7 @@ import { AnalyticsPage } from "./AnalyticsPage";
 import { EvaluationDashboardV2 } from "./EvaluationDashboardV2";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { getNotePreview } from "@/lib/utils";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 export const DashboardV2: React.FC = () => {
   const { user, logout } = useAuthStore();
@@ -341,10 +342,10 @@ export const DashboardV2: React.FC = () => {
     };
 
     return (
-      <div className="flex flex-col justify-between h-full bg-gradient-to-b from-[#081018] via-[#101A2C] to-[#172338] border-r border-white/[0.03]">
+      <div className="flex flex-col justify-between h-full bg-gradient-to-b from-[#F7F9FC] via-[#F2F5FA] to-[#E2E8F0] dark:from-[#081018] dark:via-[#101A2C] dark:to-[#172338] border-r border-border">
         <div className="flex flex-col overflow-y-auto max-h-[calc(100vh-6rem)] flex-grow scrollbar">
           {/* Logo Brand */}
-          <div className="h-14 flex items-center px-4.5 gap-2.5 border-b border-white/[0.03] shrink-0">
+          <div className="h-14 flex items-center px-4.5 gap-2.5 border-b border-border shrink-0">
             <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 text-primary shadow-[0_0_10px_rgba(79,209,197,0.15)] shrink-0 animate-pulse">
               <BrainCircuit className="h-4.5 w-4.5" />
             </span>
@@ -357,7 +358,7 @@ export const DashboardV2: React.FC = () => {
 
           {/* Workspace Switcher */}
           {(!collapsed || isMobileView) && (
-            <div className="p-3 border-b border-white/[0.03] shrink-0">
+            <div className="p-3 border-b border-border shrink-0">
               <WorkspaceSwitcher />
             </div>
           )}
@@ -582,13 +583,12 @@ export const DashboardV2: React.FC = () => {
           </nav>
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="p-3.5 border-t border-white/[0.03] space-y-3 shrink-0 bg-transparent">
+        <div className="p-3.5 border-t border-border space-y-3 shrink-0 bg-transparent">
           {/* User Profile Card */}
           {(!collapsed || isMobileView) && (
-            <div className="p-2 px-2.5 rounded-xl bg-white/[0.02] border border-white/[0.04] flex items-center justify-between gap-2.5">
+            <div className="p-2 px-2.5 rounded-xl bg-surface border border-border flex items-center justify-between gap-2.5 shadow-sm">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="h-7 w-7 rounded-full overflow-hidden border border-white/[0.08] flex items-center justify-center bg-muted shrink-0 shadow-inner">
+                <div className="h-7 w-7 rounded-full overflow-hidden border border-border flex items-center justify-center bg-muted shrink-0 shadow-inner">
                   {user?.avatar_url ? (
                     <img
                       src={
@@ -619,17 +619,7 @@ export const DashboardV2: React.FC = () => {
 
           {/* Theme & Log Out */}
           <div className="grid grid-cols-2 gap-1.5">
-            <button
-              onClick={toggleTheme}
-              title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-              className="flex items-center justify-center rounded-lg hover:bg-white/[0.04] py-1.5 border border-white/[0.04] text-muted-foreground/60 hover:text-foreground transition-all duration-150"
-            >
-              {theme === "dark" ? (
-                <Sun className="h-3.5 w-3.5 text-yellow-500/80 shrink-0" />
-              ) : (
-                <Moon className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-              )}
-            </button>
+            <ThemeToggle compact />
             <button
               onClick={handleLogout}
               title="Log Out"
@@ -715,7 +705,7 @@ export const DashboardV2: React.FC = () => {
       <div className="flex-grow flex flex-col min-w-0 h-screen overflow-hidden bg-background">
         {/* Top Navbar */}
         {!isFocusMode && (
-          <header className="h-14 border-b border-white/[0.03] bg-surface/50 backdrop-blur-md flex items-center justify-between px-6 shrink-0 z-20">
+          <header className="h-14 border-b border-border bg-surface/50 backdrop-blur-md flex items-center justify-between px-6 shrink-0 z-20">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => {
@@ -725,7 +715,7 @@ export const DashboardV2: React.FC = () => {
                     toggleSidebar();
                   }
                 }}
-                className="text-muted-foreground/60 hover:text-foreground p-1 hover:bg-white/[0.03] rounded-md transition-colors"
+                className="text-muted-foreground/60 hover:text-foreground p-1 hover:bg-foreground/[0.04] rounded-md transition-colors"
               >
                 <Menu className="h-4.5 w-4.5" />
               </button>
@@ -733,11 +723,11 @@ export const DashboardV2: React.FC = () => {
               {/* Quick Search trigger box */}
               <div
                 onClick={() => setShowSearchModal(true)}
-                className="relative hidden sm:flex items-center w-56 rounded-lg border border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.04] py-1 px-2.5 cursor-pointer text-muted-foreground/50 select-none transition-colors"
+                className="relative hidden sm:flex items-center w-56 rounded-lg border border-border bg-surface hover:bg-surface-secondary py-1 px-2.5 cursor-pointer text-muted-foreground/50 select-none transition-colors shadow-sm"
               >
                 <Search className="h-3.5 w-3.5 mr-2 text-muted-foreground/35 shrink-0" />
                 <span className="text-[11px] font-medium">Search workspace...</span>
-                <kbd className="absolute right-2 top-1.5 rounded bg-white/[0.03] px-1.5 py-0.5 text-[8px] font-mono border border-white/[0.04] shadow-sm font-semibold tracking-wide">
+                <kbd className="absolute right-2 top-1.5 rounded bg-surface-secondary px-1.5 py-0.5 text-[8px] font-mono border border-border shadow-sm font-semibold tracking-wide">
                   ⌘K
                 </kbd>
               </div>
@@ -748,7 +738,7 @@ export const DashboardV2: React.FC = () => {
               {/* Notifications Bell */}
               <button
                 onClick={() => alert("Notifications center is empty.")}
-                className="text-muted-foreground/60 hover:text-foreground p-1.5 hover:bg-white/[0.03] rounded-lg transition-colors relative"
+                className="text-muted-foreground/60 hover:text-foreground p-1.5 hover:bg-foreground/[0.04] rounded-lg transition-colors relative"
               >
                 <Bell className="h-4 w-4" />
                 <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
@@ -758,9 +748,9 @@ export const DashboardV2: React.FC = () => {
               <div className="relative">
                 <div
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center gap-2 cursor-pointer rounded-lg hover:bg-white/[0.02] p-1 transition-colors"
+                  className="flex items-center gap-2 cursor-pointer rounded-lg hover:bg-foreground/[0.03] p-1 transition-colors"
                 >
-                  <div className="h-7 w-7 rounded-full overflow-hidden border border-white/[0.08] flex items-center justify-center bg-muted shrink-0 shadow-sm">
+                  <div className="h-7 w-7 rounded-full overflow-hidden border border-border flex items-center justify-center bg-muted shrink-0 shadow-sm">
                     {user?.avatar_url ? (
                       <img
                         src={

@@ -15,7 +15,7 @@ type DashboardTab =
   | "evaluation";
 
 interface UIState {
-  theme: "light" | "dark";
+  theme: "light" | "dark" | "system";
   sidebarCollapsed: boolean;
   activeTab: DashboardTab;
   activeFolderId: string | null;
@@ -25,7 +25,7 @@ interface UIState {
   isFocusMode: boolean;
 
   toggleTheme: () => void;
-  setTheme: (theme: "light" | "dark") => void;
+  setTheme: (theme: "light" | "dark" | "system") => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleFocusMode: () => void;
@@ -40,20 +40,42 @@ interface UIState {
 
 export const useUIStore = create<UIState>((set) => {
   // Read initial theme from localStorage or system preference
-  const getInitialTheme = (): "light" | "dark" => {
+  const getInitialTheme = (): "light" | "dark" | "system" => {
     const saved = localStorage.getItem("theme");
-    if (saved === "light" || saved === "dark") return saved;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+    if (saved === "light" || saved === "dark" || saved === "system") return saved;
+    return "system";
   };
 
   const initialTheme = getInitialTheme();
-  // Apply class on load
-  if (initialTheme === "dark") {
-    document.documentElement.classList.add("dark");
-  } else {
-    document.documentElement.classList.remove("dark");
+  
+  const applyThemeClass = (themeMode: "light" | "dark" | "system") => {
+    if (typeof window === "undefined") return;
+    let isDark = false;
+    if (themeMode === "system") {
+      isDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    } else {
+      isDark = themeMode === "dark";
+    }
+
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
+
+  // Apply theme on load
+  applyThemeClass(initialTheme);
+
+  // Set up listener for system color scheme updates
+  if (typeof window !== "undefined") {
+    const darkMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    darkMediaQuery.addEventListener("change", () => {
+      const currentTheme = localStorage.getItem("theme") || "system";
+      if (currentTheme === "system") {
+        applyThemeClass("system");
+      }
+    });
   }
 
   return {
@@ -68,24 +90,21 @@ export const useUIStore = create<UIState>((set) => {
 
     toggleTheme: () =>
       set((state) => {
-        const nextTheme = state.theme === "light" ? "dark" : "light";
+        const cycle: Record<"light" | "dark" | "system", "light" | "dark" | "system"> = {
+          light: "dark",
+          dark: "system",
+          system: "light",
+        };
+        const nextTheme = cycle[state.theme];
         localStorage.setItem("theme", nextTheme);
-        if (nextTheme === "dark") {
-          document.documentElement.classList.add("dark");
-        } else {
-          document.documentElement.classList.remove("dark");
-        }
+        applyThemeClass(nextTheme);
         return { theme: nextTheme };
       }),
 
     setTheme: (theme) =>
       set(() => {
         localStorage.setItem("theme", theme);
-        if (theme === "dark") {
-          document.documentElement.classList.add("dark");
-        } else {
-          document.documentElement.classList.remove("dark");
-        }
+        applyThemeClass(theme);
         return { theme };
       }),
 
