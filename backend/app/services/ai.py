@@ -26,6 +26,7 @@ from app.db.models.extensions import (
 from app.schemas.ai import KnowledgeGraphNode, KnowledgeGraphEdgeResponse, KnowledgeGraphResponse, KnowledgeGraphEdgeCreate
 from app.services.retrieval import RetrievalService
 from app.services.embedding import get_embedding_provider
+from app.services.local_generators import generate_local_flashcards, generate_local_quiz
 
 
 class AIService:
@@ -179,30 +180,11 @@ class AIService:
 
         # Fallback if LLM unavailable or returned nothing
         if not flashcards:
-            if context:
-                # Safe sentence split approach as last resort
-                sentences = re.split(r'[.!?]+', context)
-                for m in sentences:
-                    m = m.strip()
-                    if len(m) < 30 or len(m) > 400:
-                        continue
-                    parts = re.split(r'\s+(?:is|defines|refers to|means)\s+', m, maxsplit=1, flags=re.IGNORECASE)
-                    if len(parts) == 2 and 5 <= len(parts[0].strip()) <= 150:
-                        term, desc = parts[0].strip(), parts[1].strip()
-                        fc = Flashcard(note_id=note_id, question=f"What is '{term}'?", answer=desc)
-                        self.db.add(fc)
-                        flashcards.append(fc)
-                        if len(flashcards) >= 5:
-                            break
-
-        if not flashcards:
-            fc = Flashcard(
-                note_id=note_id,
-                question="What is the primary topic of the documents in this workspace?",
-                answer="Upload and process documents to generate content-specific flashcards."
-            )
-            self.db.add(fc)
-            flashcards.append(fc)
+            logger.info("Falling back to local deterministic generator for flashcards")
+            fallback_cards = generate_local_flashcards(context, note_id, limit=5)
+            for fc in fallback_cards:
+                self.db.add(fc)
+                flashcards.append(fc)
 
         await self.db.flush()
         return flashcards
@@ -293,43 +275,14 @@ class AIService:
                         self.db.add(q)
                         question_count += 1
 
-        # Fallback: safe sentence split approach if LLM unavailable
-        if question_count == 0 and context:
-            sentences = re.split(r'[.!?]+', context)
-            for m in sentences:
-                m = m.strip()
-                if len(m) < 30 or len(m) > 400:
-                    continue
-                parts = re.split(r'\s+(?:is|defines|refers to|means)\s+', m, maxsplit=1, flags=re.IGNORECASE)
-                if len(parts) == 2 and 5 <= len(parts[0].strip()) <= 150:
-                    term, desc = parts[0].strip(), parts[1].strip()
-                    q = QuizQuestion(
-                        quiz_id=quiz.id,
-                        question_text=f"What does '{term}' refer to in the document?",
-                        choices=[desc, "A database migration tool", "A network protocol", "None of the above"],
-                        correct_answer=desc,
-                        explanation=f"The document states: '{m}'"
-                    )
-                    self.db.add(q)
-                    question_count += 1
-                    if question_count >= 3:
-                        break
-
-        # Final fallback
-        if question_count == 0:
-            q = QuizQuestion(
-                quiz_id=quiz.id,
-                question_text="What is the primary purpose of the documents in this workspace?",
-                choices=[
-                    "To provide knowledge for AI-assisted research",
-                    "To store CSS stylesheets",
-                    "To run automated tests",
-                    "None of the above"
-                ],
-                correct_answer="To provide knowledge for AI-assisted research",
-                explanation="Upload and process documents to generate content-specific quiz questions."
-            )
-            self.db.add(q)
+        # Fallback: safe deterministic approach if LLM unavailable
+        if question_count < 3:
+            logger.info("Falling back to local deterministic generator for quiz questions")
+            needed = 3 - question_count
+            fallback_qs = generate_local_quiz(context, quiz.id, limit=needed)
+            for q in fallback_qs:
+                self.db.add(q)
+                question_count += 1
 
         await self.db.flush()
 
@@ -401,30 +354,11 @@ class AIService:
 
         # Fallback if LLM unavailable or returned nothing
         if not flashcards:
-            logger.info("[AUDIT] Falling back to regex extraction for flashcards")
-            if context:
-                sentences = re.split(r'[.!?]+', context)
-                for m in sentences:
-                    m = m.strip()
-                    if len(m) < 30 or len(m) > 400:
-                        continue
-                    parts = re.split(r'\s+(?:is|defines|refers to|means)\s+', m, maxsplit=1, flags=re.IGNORECASE)
-                    if len(parts) == 2 and 5 <= len(parts[0].strip()) <= 150:
-                        term, desc = parts[0].strip(), parts[1].strip()
-                        fc = Flashcard(note_id=note_id, question=f"What is '{term}'?", answer=desc)
-                        self.db.add(fc)
-                        flashcards.append(fc)
-                        if len(flashcards) >= 5:
-                            break
-
-        if not flashcards:
-            fc = Flashcard(
-                note_id=note_id,
-                question="What is the primary topic of this knowledge source?",
-                answer="Add more content to generate context-specific flashcards."
-            )
-            self.db.add(fc)
-            flashcards.append(fc)
+            logger.info("[AUDIT] Falling back to local deterministic generator for flashcards")
+            fallback_cards = generate_local_flashcards(context, note_id, limit=5)
+            for fc in fallback_cards:
+                self.db.add(fc)
+                flashcards.append(fc)
 
         await self.db.flush()
         return flashcards
@@ -470,44 +404,14 @@ class AIService:
             else:
                 logger.warning("[AUDIT] LLM returned empty or invalid response for quizzes")
 
-        # Fallback: safe sentence split approach if LLM unavailable
-        if question_count == 0 and context:
-            logger.info("[AUDIT] Falling back to sentence splitting extraction for quizzes")
-            sentences = re.split(r'[.!?]+', context)
-            for m in sentences:
-                m = m.strip()
-                if len(m) < 30 or len(m) > 400:
-                    continue
-                parts = re.split(r'\s+(?:is|defines|refers to|means)\s+', m, maxsplit=1, flags=re.IGNORECASE)
-                if len(parts) == 2 and 5 <= len(parts[0].strip()) <= 150:
-                    term, desc = parts[0].strip(), parts[1].strip()
-                    q = QuizQuestion(
-                        quiz_id=quiz.id,
-                        question_text=f"What does '{term}' refer to in the source?",
-                        choices=[desc, "A database migration tool", "A network protocol", "None of the above"],
-                        correct_answer=desc,
-                        explanation=f"The source states: '{m}'"
-                    )
-                    self.db.add(q)
-                    question_count += 1
-                    if question_count >= 3:
-                        break
-
-        # Final fallback
-        if question_count == 0:
-            q = QuizQuestion(
-                quiz_id=quiz.id,
-                question_text="What is the primary purpose of this knowledge source?",
-                choices=[
-                    "To provide knowledge for AI-assisted research",
-                    "To store CSS stylesheets",
-                    "To run automated tests",
-                    "None of the above"
-                ],
-                correct_answer="To provide knowledge for AI-assisted research",
-                explanation="Add more content to generate context-specific quiz questions."
-            )
-            self.db.add(q)
+        # Fallback: safe deterministic approach if LLM unavailable
+        if question_count < 3:
+            logger.info("[AUDIT] Falling back to local deterministic generator for quiz questions")
+            needed = 3 - question_count
+            fallback_qs = generate_local_quiz(context, quiz.id, limit=needed)
+            for q in fallback_qs:
+                self.db.add(q)
+                question_count += 1
 
         await self.db.flush()
 

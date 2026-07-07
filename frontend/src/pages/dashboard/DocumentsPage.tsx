@@ -39,16 +39,128 @@ export const DocumentsPage: React.FC = () => {
       );
       if (activeDoc) {
         const s = activeDoc.status.toUpperCase();
+        
+        let message = current.message;
+        if (s === "UPLOADED") message = "Uploaded";
+        else if (s === "TEXT_EXTRACTED") message = "Extracting text...";
+        else if (s === "CHUNKED") message = "Chunking...";
+        else if (s === "EMBEDDED") message = "Creating embeddings...";
+        else if (s === "FLASHCARDS_READY") message = "Generating AI flashcards...";
+        else if (s === "QUIZZES_READY") message = "Generating AI quizzes...";
+
         if (s === "COMPLETED") {
           setUploadStatus({ status: "completed", message: "Document processed successfully!" });
           setTimeout(() => setUploadStatus({ status: "idle" }), 3000);
         } else if (s === "FAILED") {
           setUploadStatus({ status: "failed", message: "Failed to extract or embed document contents." });
           setTimeout(() => setUploadStatus({ status: "idle" }), 4000);
+        } else if (message !== current.message) {
+          setUploadStatus({
+            status: "processing",
+            message: message,
+            progressFilename: current.progressFilename
+          });
         }
       }
     }
   }, [documents]); // ← intentionally omits uploadStatus to break the loop
+
+  const getStepState = (
+    stepName: "upload" | "extract" | "chunk" | "embed" | "flashcards" | "quizzes" | "ready",
+    docStatus: string | undefined
+  ): "pending" | "active" | "completed" | "failed" => {
+    if (!docStatus) return "pending";
+    const s = docStatus.toUpperCase();
+
+    if (s === "FAILED") return "failed";
+
+    const stages = [
+      "UPLOADED",
+      "TEXT_EXTRACTED",
+      "CHUNKED",
+      "EMBEDDED",
+      "FLASHCARDS_READY",
+      "QUIZZES_READY",
+      "COMPLETED"
+    ];
+
+    const stepIndex = {
+      upload: 0,
+      extract: 1,
+      chunk: 2,
+      embed: 3,
+      flashcards: 4,
+      quizzes: 5,
+      ready: 6
+    }[stepName];
+
+    const currentStageIndex = stages.indexOf(s);
+
+    if (currentStageIndex === -1) {
+      if (s === "PROCESSING" || s === "PENDING") {
+        if (stepName === "upload") return "completed";
+        if (stepName === "extract") return "active";
+        return "pending";
+      }
+      return "pending";
+    }
+
+    if (currentStageIndex > stepIndex) return "completed";
+    if (currentStageIndex === stepIndex) return "active";
+    return "pending";
+  };
+
+  const renderStep = (
+    stepName: "upload" | "extract" | "chunk" | "embed" | "flashcards" | "quizzes" | "ready",
+    label: string,
+    activeDocStatus: string | undefined
+  ) => {
+    const state = getStepState(stepName, activeDocStatus);
+    
+    let circleClass = "bg-muted/10 border-border/40 text-muted-foreground/35";
+    let icon = null;
+
+    if (state === "completed") {
+      circleClass = "bg-emerald-500/10 border-emerald-500/30 text-emerald-500";
+      icon = <CheckCircle2 className="h-3 w-3" />;
+    } else if (state === "active") {
+      circleClass = "bg-indigo-500/20 border-indigo-500 text-indigo-500 animate-pulse scale-105 shadow-sm";
+      icon = <Loader size="sm" />;
+    } else if (state === "failed") {
+      circleClass = "bg-red-500/10 border-red-500/30 text-red-500";
+      icon = <AlertCircle className="h-3 w-3" />;
+    } else {
+      if (stepName === "flashcards" || stepName === "quizzes") {
+        icon = <Sparkles className="h-2.5 w-2.5" />;
+      } else {
+        icon = <Clock className="h-2.5 w-2.5" />;
+      }
+    }
+
+    return (
+      <div className="flex flex-col items-center gap-1.5 flex-1 min-w-[45px]">
+        <div className={`h-6 w-6 rounded-full flex items-center justify-center border transition-all duration-300 ${circleClass}`}>
+          {icon}
+        </div>
+        <span className={`text-[8px] font-bold leading-none tracking-tight text-center ${
+          state === "active" ? "text-indigo-500" :
+          state === "completed" ? "text-emerald-500" :
+          state === "failed" ? "text-red-500" : "text-muted-foreground/45"
+        }`}>
+          {label}
+        </span>
+      </div>
+    );
+  };
+
+  const renderConnectingLine = (
+    prevStep: "upload" | "extract" | "chunk" | "embed" | "flashcards" | "quizzes" | "ready",
+    activeDocStatus: string | undefined
+  ) => {
+    const state = getStepState(prevStep, activeDocStatus);
+    const lineClass = state === "completed" ? "bg-emerald-500/40" : "bg-border/20";
+    return <div className={`h-[1.5px] ${lineClass} flex-grow max-w-[12px] -mt-3.5 transition-all duration-300`} />;
+  };
 
   const handleUploadFile = async (file: File) => {
     if (!file) return;
@@ -138,8 +250,8 @@ export const DocumentsPage: React.FC = () => {
       case "PENDING":
       case "UPLOADED":
         return (
-          <span className="flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 shadow-sm">
-            <Clock className="h-3 w-3 animate-bounce" /> Enqueued
+          <span className="flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 shadow-sm animate-bounce">
+            <Clock className="h-3 w-3" /> Uploaded
           </span>
         );
       case "FAILED":
@@ -155,15 +267,28 @@ export const DocumentsPage: React.FC = () => {
       case "FLASHCARDS_READY":
       case "QUIZZES_READY":
         let label = "Processing...";
-        if (s === "TEXT_EXTRACTED") label = "Text Extracted";
-        else if (s === "CHUNKED") label = "Chunking text...";
-        else if (s === "EMBEDDED") label = "Embedding vectors...";
-        else if (s === "FLASHCARDS_READY") label = "Generating flashcards...";
-        else if (s === "QUIZZES_READY") label = "Generating quizzes...";
+        let icon = <Loader size="sm" />;
+        let textClass = "text-blue-500 bg-blue-500/10 border-blue-500/20";
+        
+        if (s === "TEXT_EXTRACTED") {
+          label = "Extracting text";
+        } else if (s === "CHUNKED") {
+          label = "Chunking";
+        } else if (s === "EMBEDDED") {
+          label = "Creating embeddings";
+        } else if (s === "FLASHCARDS_READY") {
+          label = "Generating AI flashcards";
+          icon = <span className="text-[10px]">⚡</span>;
+          textClass = "text-amber-500 bg-amber-500/10 border-amber-500/20";
+        } else if (s === "QUIZZES_READY") {
+          label = "Generating AI quizzes";
+          icon = <span className="text-[10px]">⚡</span>;
+          textClass = "text-purple-500 bg-purple-500/10 border-purple-500/20";
+        }
         
         return (
-          <span className="flex items-center gap-1 text-[9px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 shadow-sm animate-pulse">
-            <Loader size="sm" /> {label}
+          <span className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border shadow-sm animate-pulse ${textClass}`}>
+            {icon} {label}
           </span>
         );
       default:
@@ -184,6 +309,10 @@ export const DocumentsPage: React.FC = () => {
     hidden: { opacity: 0, scale: 0.95, y: 15 },
     show: { opacity: 1, scale: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 23 } }
   } as const;
+
+  const activeDoc = documents.find(
+    (d: DocumentItem) => d.filename === uploadStatus.progressFilename
+  );
 
   return (
     <motion.div
@@ -325,97 +454,21 @@ export const DocumentsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Progress Stepper */}
-                <div className="flex items-center justify-between gap-3 px-1 pt-2 border-t border-border/10">
-                  {/* Step 1: Upload */}
-                  <motion.div
-                    initial={{ opacity: 0.6, scale: 0.95 }}
-                    animate={{
-                      opacity: 1,
-                      scale: uploadStatus.status === "uploading" ? 1.05 : 1,
-                    }}
-                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    className="flex flex-col items-center gap-1 flex-1"
-                  >
-                    <div className={`h-6 w-6 rounded-full flex items-center justify-center border transition-all ${
-                      uploadStatus.status === "uploading"
-                        ? "bg-primary/20 border-primary text-primary"
-                        : "bg-emerald-500/10 border-emerald-500/30 text-emerald-500"
-                    }`}>
-                      {uploadStatus.status === "uploading" ? (
-                        <Loader size="sm" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      )}
-                    </div>
-                    <span className={`text-[9px] font-bold ${
-                      uploadStatus.status === "uploading" ? "text-primary" : "text-emerald-500"
-                    }`}>Upload</span>
-                  </motion.div>
-
-                  <div className="h-[2px] bg-border/20 flex-grow max-w-[20px] -mt-3" />
-
-                  {/* Step 2: Extract */}
-                  <motion.div
-                    initial={{ opacity: 0.6, scale: 0.95 }}
-                    animate={{
-                      opacity: 1,
-                      scale: uploadStatus.status === "processing" ? 1.05 : 1,
-                    }}
-                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    className="flex flex-col items-center gap-1 flex-1"
-                  >
-                    <div className={`h-6 w-6 rounded-full flex items-center justify-center border transition-all ${
-                      uploadStatus.status === "uploading" ? "bg-muted/10 border-border text-muted-foreground/40" :
-                      uploadStatus.status === "processing" ? "bg-indigo-500/20 border-indigo-500 text-indigo-500 animate-pulse" :
-                      uploadStatus.status === "completed" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500" :
-                      "bg-red-500/10 border-red-500/30 text-red-500"
-                    }`}>
-                      {uploadStatus.status === "uploading" ? (
-                        <Clock className="h-3 w-3 text-muted-foreground/30" />
-                      ) : uploadStatus.status === "processing" ? (
-                        <Loader size="sm" />
-                      ) : uploadStatus.status === "completed" ? (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      ) : (
-                        <AlertCircle className="h-3.5 w-3.5" />
-                      )}
-                    </div>
-                    <span className={`text-[9px] font-bold ${
-                      uploadStatus.status === "uploading" ? "text-muted-foreground/40" :
-                      uploadStatus.status === "processing" ? "text-indigo-500" :
-                      uploadStatus.status === "completed" ? "text-emerald-500" : "text-red-500"
-                    }`}>Extract</span>
-                  </motion.div>
-
-                  <div className="h-[2px] bg-border/20 flex-grow max-w-[20px] -mt-3" />
-
-                  {/* Step 3: Vector Index */}
-                  <motion.div
-                    initial={{ opacity: 0.6, scale: 0.95 }}
-                    animate={{
-                      opacity: 1,
-                      scale: uploadStatus.status === "completed" ? 1.05 : 1,
-                    }}
-                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    className="flex flex-col items-center gap-1 flex-1"
-                  >
-                    <div className={`h-6 w-6 rounded-full flex items-center justify-center border transition-all ${
-                      uploadStatus.status === "completed" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-500" :
-                      uploadStatus.status === "processing" ? "bg-indigo-500/10 border-indigo-500/25 text-indigo-500/70" :
-                      "bg-muted/10 border-border text-muted-foreground/30"
-                    }`}>
-                      {uploadStatus.status === "completed" ? (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      ) : (
-                        <Sparkles className="h-3 w-3" />
-                      )}
-                    </div>
-                    <span className={`text-[9px] font-bold ${
-                      uploadStatus.status === "completed" ? "text-emerald-500" :
-                      uploadStatus.status === "processing" ? "text-indigo-500/70" : "text-muted-foreground/30"
-                    }`}>Vector Index</span>
-                  </motion.div>
+                {/* 7-Stage Progress Stepper */}
+                <div className="flex items-center justify-between gap-1 px-0.5 pt-2 border-t border-border/10 overflow-x-auto pb-1 scrollbar-none">
+                  {renderStep("upload", "Upload", activeDoc?.status)}
+                  {renderConnectingLine("upload", activeDoc?.status)}
+                  {renderStep("extract", "Extract", activeDoc?.status)}
+                  {renderConnectingLine("extract", activeDoc?.status)}
+                  {renderStep("chunk", "Chunk", activeDoc?.status)}
+                  {renderConnectingLine("chunk", activeDoc?.status)}
+                  {renderStep("embed", "Embed", activeDoc?.status)}
+                  {renderConnectingLine("embed", activeDoc?.status)}
+                  {renderStep("flashcards", "Cards", activeDoc?.status)}
+                  {renderConnectingLine("flashcards", activeDoc?.status)}
+                  {renderStep("quizzes", "Quizzes", activeDoc?.status)}
+                  {renderConnectingLine("quizzes", activeDoc?.status)}
+                  {renderStep("ready", "Ready", activeDoc?.status)}
                 </div>
               </motion.div>
             )}

@@ -34,19 +34,43 @@ export const useDocuments = () => {
     // returns `false` and polling stops automatically.
     refetchInterval: (query) => {
       const data = query.state.data;
-      if (
-        data &&
-        data.some(
-          (doc) => 
-            doc.status !== "completed" && 
-            doc.status !== "failed" && 
-            doc.status !== "COMPLETED" && 
-            doc.status !== "FAILED"
-        )
-      ) {
-        return 3000; // 3 s — tight enough to feel responsive during uploads
+      if (!data || data.length === 0) {
+        return false;
       }
-      return false; // No active processing → kill the timer
+
+      let minInterval: number | null = null;
+
+      for (const doc of data) {
+        const s = doc.status.toUpperCase();
+        
+        // Skip terminal/stopped states
+        if (
+          s === "COMPLETED" || 
+          s === "FAILED" || 
+          s === "QUIZZES_READY" ||
+          doc.status === "completed" ||
+          doc.status === "failed"
+        ) {
+          continue;
+        }
+
+        let interval = 3000; // default fallback for active states
+        if (s === "UPLOADED" || doc.status === "pending" || doc.status === "processing") {
+          interval = 1000;
+        } else if (s === "TEXT_EXTRACTED" || s === "CHUNKED") {
+          interval = 2000;
+        } else if (s === "EMBEDDED") {
+          interval = 3000;
+        } else if (s === "FLASHCARDS_READY") {
+          interval = 5000;
+        }
+
+        if (minInterval === null || interval < minInterval) {
+          minInterval = interval;
+        }
+      }
+
+      return minInterval !== null ? minInterval : false;
     },
 
     // ── Cache tunables ────────────────────────────────────────────────────────
