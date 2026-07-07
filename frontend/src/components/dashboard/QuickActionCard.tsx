@@ -7,7 +7,7 @@ interface QuickActionCardProps {
   description: string;
   icon: React.ReactNode;
   onClick: () => void;
-  color?: "primary" | "emerald" | "amber" | "rose" | "purple";
+  color?: "primary" | "emerald" | "amber" | "rose" | "purple" | "indigo";
 }
 
 export const QuickActionCard: React.FC<QuickActionCardProps> = ({
@@ -51,9 +51,15 @@ export const QuickActionCard: React.FC<QuickActionCardProps> = ({
       border: "border-purple-500/15",
       glow: "group-hover:border-purple-500/40 group-hover:shadow-[0_0_15px_rgba(168,85,247,0.12)]",
     },
+    indigo: {
+      text: "text-indigo-400",
+      bg: "bg-indigo-500/8",
+      border: "border-indigo-500/15",
+      glow: "group-hover:border-indigo-500/40 group-hover:shadow-[0_0_15px_rgba(99,102,241,0.12)]",
+    },
   };
 
-  const scheme = colorStyles[color];
+  const scheme = colorStyles[color] || colorStyles.primary;
 
   return (
     <motion.div
