@@ -6,6 +6,7 @@ import { AppRoutes } from "@/routes/index"; // Points to src/routes/index.tsx
 import { RouteErrorBoundary } from "@/components/layout/RouteErrorBoundary";
 
 import { Loader } from "./components/ui/Loader";
+import { LoadingProvider, LoadingOverlay } from "@/components/loading";
 
 // Global React Query defaults — applied to ALL queries unless overridden.
 // These are the safety net for any hook that forgets to set its own options.
@@ -75,24 +76,15 @@ function App() {
     };
   }, []);
 
-  if (!authReady) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <Loader size="lg" />
-          <p className="text-xs text-muted-foreground animate-pulse mt-2">
-            Verifying secure workspace session...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <QueryClientProvider client={queryClient}>
-      <RouteErrorBoundary>
-        <AppRoutes />
-      </RouteErrorBoundary>
+      <LoadingProvider>
+        <LoadingOverlay>
+          <RouteErrorBoundary>
+            <AppRoutes />
+          </RouteErrorBoundary>
+        </LoadingOverlay>
+      </LoadingProvider>
     </QueryClientProvider>
   );
 }
