@@ -68,7 +68,7 @@ export const DashboardMetric: React.FC<DashboardMetricProps> = ({
     },
   };
 
-  const scheme = colorMap[color];
+  const scheme = colorMap[color] || colorMap.indigo;
 
   return (
     <motion.div
