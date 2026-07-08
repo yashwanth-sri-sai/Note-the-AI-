@@ -1,6 +1,7 @@
 import io
 import re
 from typing import Dict, Any, Protocol, List
+from app.services.cleaner import DocumentCleaner
 
 # Conditional imports for PyMuPDF and python-docx
 try:
@@ -47,7 +48,13 @@ class PDFExtractor:
                         section_title = line_clean
                         break
                 
-                # Normalize newlines and append to unified text
+                # Clean page text using DocumentCleaner
+                text = DocumentCleaner.clean(text)
+                if not text.strip():
+                    continue
+
+                # Add double newlines between pages to keep paragraph structures separated
+                text = text + "\n\n"
                 text_len = len(text)
                 full_text.append(text)
                 
@@ -92,6 +99,27 @@ class DOCXExtractor:
             paragraphs.append(p.text)
             if len(paragraphs) >= 15:
                 segment_text = "\n\n".join(paragraphs) + "\n\n"
+                segment_text = DocumentCleaner.clean(segment_text)
+                if segment_text:
+                    segment_text += "\n\n"
+                    text_len = len(segment_text)
+                    full_text.append(segment_text)
+                    
+                    page_map.append({
+                        "start_offset": current_offset,
+                        "end_offset": current_offset + text_len,
+                        "page_number": page_num,
+                        "section_title": current_section
+                    })
+                    current_offset += text_len
+                paragraphs = []
+                page_num += 1
+                
+        if paragraphs:
+            segment_text = "\n\n".join(paragraphs) + "\n\n"
+            segment_text = DocumentCleaner.clean(segment_text)
+            if segment_text:
+                segment_text += "\n\n"
                 text_len = len(segment_text)
                 full_text.append(segment_text)
                 
@@ -101,21 +129,6 @@ class DOCXExtractor:
                     "page_number": page_num,
                     "section_title": current_section
                 })
-                current_offset += text_len
-                paragraphs = []
-                page_num += 1
-                
-        if paragraphs:
-            segment_text = "\n\n".join(paragraphs) + "\n\n"
-            text_len = len(segment_text)
-            full_text.append(segment_text)
-            
-            page_map.append({
-                "start_offset": current_offset,
-                "end_offset": current_offset + text_len,
-                "page_number": page_num,
-                "section_title": current_section
-            })
             
         return {
             "text": "".join(full_text),
@@ -130,11 +143,12 @@ class TXTExtractor:
         except UnicodeDecodeError:
             raw_text = file_bytes.decode("latin-1")
             
+        cleaned_text = DocumentCleaner.clean(raw_text)
         return {
-            "text": raw_text,
+            "text": cleaned_text,
             "page_map": [{
                 "start_offset": 0,
-                "end_offset": len(raw_text),
+                "end_offset": len(cleaned_text),
                 "page_number": 1,
                 "section_title": None
             }]
@@ -161,15 +175,18 @@ class MarkdownExtractor:
             if match:
                 if current_content and any(c.strip() for c in current_content):
                     segment_text = "\n".join(current_content) + "\n"
-                    text_len = len(segment_text)
-                    full_text.append(segment_text)
-                    page_map.append({
-                        "start_offset": current_offset,
-                        "end_offset": current_offset + text_len,
-                        "page_number": 1,
-                        "section_title": current_section
-                    })
-                    current_offset += text_len
+                    segment_text = DocumentCleaner.clean(segment_text)
+                    if segment_text:
+                        segment_text += "\n\n"
+                        text_len = len(segment_text)
+                        full_text.append(segment_text)
+                        page_map.append({
+                            "start_offset": current_offset,
+                            "end_offset": current_offset + text_len,
+                            "page_number": 1,
+                            "section_title": current_section
+                        })
+                        current_offset += text_len
                     
                 current_section = match.group(2).strip()
                 current_content = [line]
@@ -178,14 +195,17 @@ class MarkdownExtractor:
                 
         if current_content and any(c.strip() for c in current_content):
             segment_text = "\n".join(current_content) + "\n"
-            text_len = len(segment_text)
-            full_text.append(segment_text)
-            page_map.append({
-                "start_offset": current_offset,
-                "end_offset": current_offset + text_len,
-                "page_number": 1,
-                "section_title": current_section
-            })
+            segment_text = DocumentCleaner.clean(segment_text)
+            if segment_text:
+                segment_text += "\n\n"
+                text_len = len(segment_text)
+                full_text.append(segment_text)
+                page_map.append({
+                    "start_offset": current_offset,
+                    "end_offset": current_offset + text_len,
+                    "page_number": 1,
+                    "section_title": current_section
+                })
             
         return {
             "text": "".join(full_text),

@@ -29,14 +29,16 @@ Vector similarity search is executed using the pgvector extension.
 This ensures notes semantic search is fast and efficient.
 """
 
-def test_extract_sentences():
+@pytest.mark.asyncio
+async def test_extract_sentences():
     sentences = extract_sentences(SAMPLE_TEXT)
     assert len(sentences) > 0
     # Must preserve bullet points and lists
     assert any(s.startswith("1. ") for s in sentences)
     assert any("Retrieval-Augmented Generation" in s for s in sentences)
 
-def test_score_sentences():
+@pytest.mark.asyncio
+async def test_score_sentences():
     sentences = extract_sentences(SAMPLE_TEXT)
     freqs = calculate_word_frequencies(SAMPLE_TEXT)
     scored = score_sentences(sentences, freqs)
@@ -47,7 +49,8 @@ def test_score_sentences():
     assert highest_score > 0
     assert any(indicator in highest_s for indicator in ["is defined as", "refers to", "means", "**"])
 
-def test_extract_term_definition():
+@pytest.mark.asyncio
+async def test_extract_term_definition():
     s1 = "Retrieval-Augmented Generation (RAG) is defined as a technique that combines retrieval models with generative LLMs."
     res = extract_term_definition(s1)
     assert res is not None
@@ -60,7 +63,8 @@ def test_extract_term_definition():
     assert res2[0] == "Chunker"
     assert "module that splits" in res2[1]
 
-def test_generate_local_flashcards():
+@pytest.mark.asyncio
+async def test_generate_local_flashcards():
     note_id = uuid.uuid4()
     flashcards = generate_local_flashcards(SAMPLE_TEXT, note_id, limit=5)
     
@@ -73,7 +77,8 @@ def test_generate_local_flashcards():
         assert len(fc.question) > 0
         assert len(fc.answer) > 0
 
-def test_generate_local_quiz():
+@pytest.mark.asyncio
+async def test_generate_local_quiz():
     quiz_id = uuid.uuid4()
     questions = generate_local_quiz(SAMPLE_TEXT, quiz_id, limit=3)
     

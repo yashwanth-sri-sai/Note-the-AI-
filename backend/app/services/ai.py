@@ -79,7 +79,7 @@ class AIService:
         return list(result_fc.scalars().all())
 
     async def _call_gemini_json(self, prompt: str) -> Optional[Any]:
-        """Call Gemini API and parse JSON from the response. Returns None on failure."""
+        """Call Gemini API and parse JSON from the response. Returns None on failure, attempts repairs."""
         from app.core.config import settings
         from app.core.retries import retry_with_backoff
         from app.core.circuit_breaker import llm_breaker
@@ -87,11 +87,12 @@ class AIService:
         gemini_key = settings.GEMINI_API_KEY or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         gemini_model = settings.GEMINI_MODEL or os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
         if not gemini_key:
+            logger.error("Gemini API key is not configured.")
             return None
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent"
         payload = {
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.4, "responseMimeType": "application/json"}
+            "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}
         }
 
         async def _make_call():
@@ -101,10 +102,23 @@ class AIService:
                     raise Exception(f"Gemini API returned error {resp.status_code}: {resp.text}")
                 data = resp.json()
                 raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                
                 # Strip markdown code fences if Gemini wraps in ```json
-                raw_text = re.sub(r'^```(?:json)?\s*', '', raw_text)
-                raw_text = re.sub(r'\s*```$', '', raw_text)
-                return json.loads(raw_text)
+                raw_clean = re.sub(r'^```(?:json)?\s*', '', raw_text)
+                raw_clean = re.sub(r'\s*```$', '', raw_clean).strip()
+                
+                try:
+                    return json.loads(raw_clean)
+                except json.JSONDecodeError as je:
+                    logger.warning(f"Raw JSON parsing failed, attempting repair. Text: {raw_clean[:100]}... Error: {je}")
+                    # Attempt simple repair of array layout
+                    bracket_match = re.search(r'\[\s*\{.*\}\s*\]', raw_clean, re.DOTALL)
+                    if bracket_match:
+                        try:
+                            return json.loads(bracket_match.group(0))
+                        except Exception:
+                            pass
+                    raise je
 
         async def _run_with_retry():
             return await retry_with_backoff(_make_call)
@@ -119,8 +133,8 @@ class AIService:
             logger.error(f"Gemini JSON API call failed: {e}")
             return None
 
-    async def _get_workspace_context(self, workspace_id: uuid.UUID, note_id: uuid.UUID, limit: int = 10) -> str:
-        """Fetch specific document chunk text if note_id represents a document, else fallback to note content."""
+    async def _get_workspace_context(self, workspace_id: uuid.UUID, note_id: uuid.UUID, limit: int = 15) -> str:
+        """Fetch and rank document chunk texts educationally, avoiding duplicates and preserving concept density."""
         # Check if this note_id actually represents an ingested Document
         doc_stmt = select(Document).where(Document.id == note_id, Document.workspace_id == workspace_id)
         doc_res = await self.db.execute(doc_stmt)
@@ -128,66 +142,116 @@ class AIService:
         
         if doc:
             stmt_chunks = (
-                select(DocumentChunk.chunk_text, Document.filename)
+                select(DocumentChunk.chunk_text, DocumentChunk.chunk_index, Document.filename)
                 .join(Document, DocumentChunk.document_id == Document.id)
                 .where(Document.id == note_id)
                 .where(Document.status == "completed")
                 .order_by(DocumentChunk.chunk_index)
-                .limit(limit)
             )
             res_chunks = await self.db.execute(stmt_chunks)
             rows = res_chunks.all()
             if rows:
+                scored_chunks = []
+                for row in rows:
+                    text = row.chunk_text or ""
+                    # Heuristics scoring for concept density / definition richness
+                    def_score = len(re.findall(r'\b(is defined as|refers to|means|denotes|stands for|is a type of)\b', text, re.IGNORECASE)) * 2.5
+                    list_score = len(re.findall(r'^\s*[-*•\d+.]', text, re.MULTILINE)) * 1.0
+                    cause_score = len(re.findall(r'\b(because|due to|leads to|consequence|result|since|therefore)\b', text, re.IGNORECASE)) * 1.5
+                    bold_score = len(re.findall(r'(\*\*|__)', text)) * 0.5
+                    
+                    total_score = def_score + list_score + cause_score + bold_score
+                    scored_chunks.append((total_score, row))
+                
+                # Sort by score in descending order and select top chunks
+                scored_chunks.sort(key=lambda x: x[0], reverse=True)
+                top_chunks = [item[1] for item in scored_chunks[:limit]]
+                
+                # Re-sort top chunks by chunk_index to keep sequential logic intact
+                top_chunks.sort(key=lambda row: row.chunk_index)
+                
                 parts = []
-                for r in rows:
-                    parts.append(f"[{r.filename}]\n{r.chunk_text}")
-                return "\n\n".join(parts)
+                for row in top_chunks:
+                    parts.append(f"[{row.filename}]\n{row.chunk_text}")
+                
+                full_context = "\n\n".join(parts)
+                return full_context[:6000]
 
         # Fallback: note content
         note_stmt = select(Note).where(Note.id == note_id, Note.workspace_id == workspace_id)
         res_note = await self.db.execute(note_stmt)
         note = res_note.scalar_one_or_none()
         if note and note.content and note.content.strip():
-            return note.content
+            from app.services.cleaner import DocumentCleaner
+            cleaned_note = DocumentCleaner.clean(note.content)
+            return cleaned_note[:6000]
         return ""
 
-    async def generate_note_flashcards(self, note_id: uuid.UUID, workspace_id: uuid.UUID) -> List[Flashcard]:
-        """Generate flashcards from document chunks using Gemini LLM with JSON output."""
-        context = await self._get_workspace_context(workspace_id, note_id, limit=10)
-
+    async def _generate_flashcards_from_context_str(self, note_id: uuid.UUID, context: str) -> List[Flashcard]:
+        """Core generator and validator for flashcards from context."""
         flashcards: List[Flashcard] = []
-
-        if context:
+        logger.info(f"Generating flashcards for note {note_id} (context length: {len(context) if context else 0})")
+        
+        if context and context.strip():
             prompt = (
-                "You are an expert educational content creator. "
-                "Read the following document content and generate exactly 5 flashcards as a JSON array. "
-                "Each flashcard must have a 'question' and an 'answer' field. "
-                "Questions should test understanding of key concepts, facts, and ideas in the text. "
-                "Answers should be concise (1-3 sentences). "
-                "Return ONLY a JSON array, no extra text.\n\n"
-                f"Document content:\n{context[:4000]}\n\n"
+                "You are an expert university professor and professional educational content creator.\n"
+                "Your task is to read the provided document context and generate exactly 5 high-quality flashcards as a JSON array.\n\n"
+                "Strict Rules:\n"
+                "1. Generate meaningful, conceptual questions. Do not copy raw sentences. Do not create trivial or incomplete questions.\n"
+                "2. Ignore corrupted text, OCR symbols, headers, page numbers, citations, or references.\n"
+                "3. Every question must be fully answerable based strictly on the provided context. If the context does not contain enough information to generate 5 high-quality conceptual cards, generate fewer cards (or return an empty array []). Quality is prioritized over quantity.\n"
+                "4. Answers must be clear, complete sentences (1-3 sentences), explaining the concept thoroughly.\n"
+                "5. Format the output STRICTLY as a valid JSON array of objects, each containing exactly 'question' and 'answer' keys. Return absolutely no other text, markdown formatting (outside of the JSON block), or explanation.\n\n"
+                f"Document Context:\n{context}\n\n"
                 "Format: [{\"question\": \"...\", \"answer\": \"...\"}]"
             )
+            
             result = await self._call_gemini_json(prompt)
             if result and isinstance(result, list):
-                for item in result[:5]:
+                from app.services.ai_validator import AIValidator
+                for item in result:
                     q_text = item.get("question", "").strip()
                     a_text = item.get("answer", "").strip()
-                    if q_text and a_text:
-                        fc = Flashcard(note_id=note_id, question=q_text, answer=a_text)
-                        self.db.add(fc)
-                        flashcards.append(fc)
+                    if not q_text or not a_text:
+                        continue
+                        
+                    # Auto repair
+                    q_rep, a_rep = AIValidator.auto_repair_flashcard(q_text, a_text)
+                    
+                    # Validate
+                    is_valid, err_reason = AIValidator.validate_flashcard(q_rep, a_rep, context)
+                    if not is_valid:
+                        logger.warning(f"Flashcard validation failed: {err_reason}. Raw Q: {q_text}")
+                        continue
+                        
+                    # Score (threshold = 0.70)
+                    score = AIValidator.score_flashcard(q_rep, a_rep, context)
+                    if score < 0.70:
+                        logger.warning(f"Flashcard quality score too low ({score} < 0.70). Question: {q_rep}")
+                        continue
+                        
+                    fc = Flashcard(note_id=note_id, question=q_rep, answer=a_rep)
+                    self.db.add(fc)
+                    flashcards.append(fc)
+                    
+                    if len(flashcards) >= 5:
+                        break
 
-        # Fallback if LLM unavailable or returned nothing
+        # Fallback if no cards successfully generated
         if not flashcards:
-            logger.info("Falling back to local deterministic generator for flashcards")
+            logger.info("Falling back to local fallback generator for flashcards")
             fallback_cards = generate_local_flashcards(context, note_id, limit=5)
             for fc in fallback_cards:
                 self.db.add(fc)
                 flashcards.append(fc)
-
+                
         await self.db.flush()
         return flashcards
+
+    async def generate_note_flashcards(self, note_id: uuid.UUID, workspace_id: uuid.UUID) -> List[Flashcard]:
+        """Generate flashcards from document chunks using Gemini LLM with JSON output."""
+        context = await self._get_workspace_context(workspace_id, note_id, limit=15)
+        return await self._generate_flashcards_from_context_str(note_id, context)
 
     async def review_flashcard(self, flashcard_id: uuid.UUID, user_id: uuid.UUID, rating: int) -> Flashcard:
         """Submit flashcard score rating and adjust schedule using SuperMemo-2 (SM-2) algorithm."""
@@ -235,61 +299,85 @@ class AIService:
         result_qz = await self.db.execute(query_qz)
         return list(result_qz.scalars().all())
 
-    async def generate_note_quiz(self, note_id: uuid.UUID, workspace_id: uuid.UUID) -> Quiz:
-        """Create a multiple-choice quiz from workspace document chunks using Gemini LLM with JSON output."""
-        context = await self._get_workspace_context(workspace_id, note_id, limit=10)
-
+    async def _generate_quiz_from_context_str(self, note_id: uuid.UUID, context: str) -> Quiz:
+        """Core generator and validator for quizzes from context."""
+        logger.info(f"Generating quiz for note {note_id} (context length: {len(context) if context else 0})")
+        
         quiz = Quiz(note_id=note_id, title="Knowledge Quiz")
         self.db.add(quiz)
         await self.db.flush()
-
+        
         question_count = 0
-
-        if context:
+        
+        if context and context.strip():
             prompt = (
-                "You are an expert quiz creator. "
-                "Read the following document content and generate exactly 3 multiple-choice questions as a JSON array. "
-                "Each question must have: 'question_text' (string), 'choices' (array of 4 strings), "
-                "'correct_answer' (string matching one of the choices exactly), 'explanation' (string). "
-                "Base all questions strictly on facts found in the provided text. "
-                "Return ONLY a JSON array, no extra text.\n\n"
-                f"Document content:\n{context[:4000]}\n\n"
-                "Format: [{\"question_text\": \"...\", \"choices\": [\"A\",\"B\",\"C\",\"D\"], "
-                "\"correct_answer\": \"A\", \"explanation\": \"...\"}]"
+                "You are an expert university professor and professional educational content creator.\n"
+                "Your task is to read the provided document context and generate exactly 3 premium multiple-choice questions (MCQs) as a JSON array.\n\n"
+                "Strict Rules:\n"
+                "1. Each question must test comprehension of important concepts, definitions, processes, or relationships.\n"
+                "2. The distractors (wrong answers) must be highly plausible, grammatically consistent with the correct answer, and not obviously wrong or joke answers.\n"
+                "3. Ignore corrupted text, OCR symbols, headers, page numbers, citations, or references.\n"
+                "4. Each item in the JSON array must contain:\n"
+                "   - 'question_text': The clear, concise question.\n"
+                "   - 'choices': An array of exactly 4 choices (strings).\n"
+                "   - 'correct_answer': The correct choice (matching one of the choices exactly).\n"
+                "   - 'explanation': A detailed explanation of why that choice is correct.\n"
+                "5. Format the output STRICTLY as a valid JSON array of objects. Return absolutely no other text, markdown formatting, or explanations.\n\n"
+                f"Document Context:\n{context}\n\n"
+                "Format: [{\"question_text\": \"...\", \"choices\": [\"A\",\"B\",\"C\",\"D\"], \"correct_answer\": \"A\", \"explanation\": \"...\"}]"
             )
+            
             result = await self._call_gemini_json(prompt)
             if result and isinstance(result, list):
-                for item in result[:3]:
+                from app.services.ai_validator import AIValidator
+                for item in result:
                     q_text = item.get("question_text", "").strip()
                     choices = item.get("choices", [])
                     correct = item.get("correct_answer", "").strip()
                     explanation = item.get("explanation", "").strip()
-                    if q_text and choices and correct:
-                        q = QuizQuestion(
-                            quiz_id=quiz.id,
-                            question_text=q_text,
-                            choices=choices,
-                            correct_answer=correct,
-                            explanation=explanation
-                        )
-                        self.db.add(q)
-                        question_count += 1
+                    
+                    choices_clean = [c.strip() for c in choices]
+                    is_valid, err_reason = AIValidator.validate_quiz_question(
+                        q_text, choices_clean, correct, explanation
+                    )
+                    
+                    if not is_valid:
+                        logger.warning(f"Quiz question validation failed: {err_reason}. Question: {q_text}")
+                        continue
+                        
+                    q = QuizQuestion(
+                        quiz_id=quiz.id,
+                        question_text=q_text,
+                        choices=choices_clean,
+                        correct_answer=correct,
+                        explanation=explanation
+                    )
+                    self.db.add(q)
+                    question_count += 1
+                    
+                    if question_count >= 3:
+                        break
 
-        # Fallback: safe deterministic approach if LLM unavailable
+        # Fallback if quiz is empty or incomplete
         if question_count < 3:
-            logger.info("Falling back to local deterministic generator for quiz questions")
+            logger.info("Falling back to local fallback generator for quiz")
             needed = 3 - question_count
             fallback_qs = generate_local_quiz(context, quiz.id, limit=needed)
             for q in fallback_qs:
                 self.db.add(q)
                 question_count += 1
-
+                
         await self.db.flush()
-
+        
         # Reload with relations
         query_reload = select(Quiz).where(Quiz.id == quiz.id).options(selectinload(Quiz.questions))
-        result = await self.db.execute(query_reload)
-        return result.scalar_one()
+        res = await self.db.execute(query_reload)
+        return res.scalar_one()
+
+    async def generate_note_quiz(self, note_id: uuid.UUID, workspace_id: uuid.UUID) -> Quiz:
+        """Create a multiple-choice quiz from workspace document chunks using Gemini LLM with JSON output."""
+        context = await self._get_workspace_context(workspace_id, note_id, limit=15)
+        return await self._generate_quiz_from_context_str(note_id, context)
 
     async def submit_quiz(self, quiz_id: uuid.UUID, answers: Dict[uuid.UUID, str]) -> Dict:
         """Evaluate user responses for a quiz and grade performance."""
@@ -326,99 +414,11 @@ class AIService:
 
     async def generate_flashcards_with_context(self, note_id: uuid.UUID, context: str) -> List[Flashcard]:
         """Generate flashcards using pre-fetched context text. Used by KnowledgeService endpoints."""
-        flashcards: List[Flashcard] = []
-        logger.info(f"[AUDIT] AI Service - generate_flashcards_with_context called for note_id: {note_id}, context length: {len(context) if context else 0}")
-
-        if context:
-            prompt = (
-                "You are an expert educational content creator. "
-                "Read the following document content and generate exactly 5 flashcards as a JSON array. "
-                "Each flashcard must have a 'question' and an 'answer' field. "
-                "Questions should test understanding of key concepts, facts, and ideas in the text. "
-                "Answers should be concise (1-3 sentences). "
-                "Return ONLY a JSON array, no extra text.\n\n"
-                f"Document content:\n{context[:4000]}\n\n"
-                "Format: [{\"question\": \"...\", \"answer\": \"...\"}]"
-            )
-            result = await self._call_gemini_json(prompt)
-            if result and isinstance(result, list):
-                for item in result[:5]:
-                    q_text = item.get("question", "").strip()
-                    a_text = item.get("answer", "").strip()
-                    if q_text and a_text:
-                        fc = Flashcard(note_id=note_id, question=q_text, answer=a_text)
-                        self.db.add(fc)
-                        flashcards.append(fc)
-            else:
-                logger.warning("[AUDIT] LLM returned empty or invalid response for flashcards")
-
-        # Fallback if LLM unavailable or returned nothing
-        if not flashcards:
-            logger.info("[AUDIT] Falling back to local deterministic generator for flashcards")
-            fallback_cards = generate_local_flashcards(context, note_id, limit=5)
-            for fc in fallback_cards:
-                self.db.add(fc)
-                flashcards.append(fc)
-
-        await self.db.flush()
-        return flashcards
+        return await self._generate_flashcards_from_context_str(note_id, context)
 
     async def generate_quiz_with_context(self, note_id: uuid.UUID, context: str) -> Quiz:
         """Generate a quiz using pre-fetched context text. Used by KnowledgeService endpoints."""
-        logger.info(f"[AUDIT] AI Service - generate_quiz_with_context called for note_id: {note_id}, context length: {len(context) if context else 0}")
-        quiz = Quiz(note_id=note_id, title="Knowledge Quiz")
-        self.db.add(quiz)
-        await self.db.flush()
-
-        question_count = 0
-
-        if context:
-            prompt = (
-                "You are an expert quiz creator. "
-                "Read the following document content and generate exactly 3 multiple-choice questions as a JSON array. "
-                "Each question must have: 'question_text' (string), 'choices' (array of 4 strings), "
-                "'correct_answer' (string matching one of the choices exactly), 'explanation' (string). "
-                "Base all questions strictly on facts found in the provided text. "
-                "Return ONLY a JSON array, no extra text.\n\n"
-                f"Document content:\n{context[:4000]}\n\n"
-                "Format: [{\"question_text\": \"...\", \"choices\": [\"A\",\"B\",\"C\",\"D\"], "
-                "\"correct_answer\": \"A\", \"explanation\": \"...\"}]"
-            )
-            result = await self._call_gemini_json(prompt)
-            if result and isinstance(result, list):
-                for item in result[:3]:
-                    q_text = item.get("question_text", "").strip()
-                    choices = item.get("choices", [])
-                    correct = item.get("correct_answer", "").strip()
-                    explanation = item.get("explanation", "").strip()
-                    if q_text and choices and correct:
-                        q = QuizQuestion(
-                            quiz_id=quiz.id,
-                            question_text=q_text,
-                            choices=choices,
-                            correct_answer=correct,
-                            explanation=explanation
-                        )
-                        self.db.add(q)
-                        question_count += 1
-            else:
-                logger.warning("[AUDIT] LLM returned empty or invalid response for quizzes")
-
-        # Fallback: safe deterministic approach if LLM unavailable
-        if question_count < 3:
-            logger.info("[AUDIT] Falling back to local deterministic generator for quiz questions")
-            needed = 3 - question_count
-            fallback_qs = generate_local_quiz(context, quiz.id, limit=needed)
-            for q in fallback_qs:
-                self.db.add(q)
-                question_count += 1
-
-        await self.db.flush()
-
-        # Reload with relations
-        query_reload = select(Quiz).where(Quiz.id == quiz.id).options(selectinload(Quiz.questions))
-        result = await self.db.execute(query_reload)
-        return result.scalar_one()
+        return await self._generate_quiz_from_context_str(note_id, context)
 
     # =========================================================================
     # KNOWLEDGE GRAPH (Semantic Similarity Relations)

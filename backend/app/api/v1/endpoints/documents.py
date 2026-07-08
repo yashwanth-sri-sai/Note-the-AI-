@@ -16,7 +16,10 @@ from app.services.embedding import get_embedding_provider
 from app.services.token_estimator import TokenService
 from app.core.exceptions import NotFoundException, ForbiddenException, BadRequestException
 import os
-import magic
+try:
+    import magic
+except ImportError:
+    magic = None
 from pathlib import Path
 from app.api.middlewares.rate_limiter import limiter
 
@@ -434,7 +437,16 @@ async def upload_document(
 
         # 1.5 Strict MIME Type validation using magic bytes
         logger.info("Validating MIME type using magic bytes...")
-        detected_mime = magic.from_buffer(file_bytes, mime=True)
+        if magic is not None:
+            try:
+                detected_mime = magic.from_buffer(file_bytes, mime=True)
+            except Exception as e:
+                logger.warning(f"magic.from_buffer failed: {e}. Falling back to mimetypes.")
+                import mimetypes
+                detected_mime = mimetypes.guess_type(file.filename)[0] or "application/octet-stream"
+        else:
+            import mimetypes
+            detected_mime = mimetypes.guess_type(file.filename)[0] or "application/octet-stream"
         valid_mimes = {
             ".pdf": "application/pdf",
             ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

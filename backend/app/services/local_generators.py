@@ -3,6 +3,7 @@ import uuid
 import logging
 from typing import List, Dict, Any, Tuple, Optional
 from app.db.models.extensions import Flashcard, QuizQuestion
+from app.services.ai_validator import AIValidator
 
 logger = logging.getLogger("app.services.local_generators")
 
@@ -133,7 +134,6 @@ def generate_local_flashcards(context: str, note_id: uuid.UUID, limit: int = 5) 
     seen_questions = set()
     
     if not context or not context.strip():
-        # Safeguard fallback if context is completely empty
         return _get_default_flashcards(note_id, limit)
     
     sentences = extract_sentences(context)
@@ -148,10 +148,15 @@ def generate_local_flashcards(context: str, note_id: uuid.UUID, limit: int = 5) 
             question = f"What is '{term}'?"
             # Clean definition of trailing punctuation/md tags
             definition = re.sub(r'[\*\s]+$', '', definition)
-            if question not in seen_questions and len(definition) > 10:
-                fc = Flashcard(note_id=note_id, question=question, answer=definition)
+            
+            # Apply repair and validation
+            q_rep, a_rep = AIValidator.auto_repair_flashcard(question, definition)
+            is_valid, _ = AIValidator.validate_flashcard(q_rep, a_rep, context)
+            
+            if is_valid and q_rep not in seen_questions:
+                fc = Flashcard(note_id=note_id, question=q_rep, answer=a_rep)
                 flashcards.append(fc)
-                seen_questions.add(question)
+                seen_questions.add(q_rep)
                 if len(flashcards) >= limit:
                     break
 
@@ -165,10 +170,14 @@ def generate_local_flashcards(context: str, note_id: uuid.UUID, limit: int = 5) 
                     question = f"Explain the concept of '{term}' based on the document."
                     # Clean out markdown stars from answer
                     answer = s.replace("**", "").replace("__", "").strip()
-                    if question not in seen_questions:
-                        fc = Flashcard(note_id=note_id, question=question, answer=answer)
+                    
+                    q_rep, a_rep = AIValidator.auto_repair_flashcard(question, answer)
+                    is_valid, _ = AIValidator.validate_flashcard(q_rep, a_rep, context)
+                    
+                    if is_valid and q_rep not in seen_questions:
+                        fc = Flashcard(note_id=note_id, question=q_rep, answer=a_rep)
                         flashcards.append(fc)
-                        seen_questions.add(question)
+                        seen_questions.add(q_rep)
                         if len(flashcards) >= limit:
                             break
             if len(flashcards) >= limit:
@@ -188,14 +197,18 @@ def generate_local_flashcards(context: str, note_id: uuid.UUID, limit: int = 5) 
             key_concept = tokens[0].capitalize()
             
             question = f"What key information does the document provide regarding {key_concept}?"
-            if question not in seen_questions:
-                fc = Flashcard(note_id=note_id, question=question, answer=clean_s)
+            
+            q_rep, a_rep = AIValidator.auto_repair_flashcard(question, clean_s)
+            is_valid, _ = AIValidator.validate_flashcard(q_rep, a_rep, context)
+            
+            if is_valid and q_rep not in seen_questions:
+                fc = Flashcard(note_id=note_id, question=q_rep, answer=a_rep)
                 flashcards.append(fc)
-                seen_questions.add(question)
+                seen_questions.add(q_rep)
                 if len(flashcards) >= limit:
                     break
 
-    # Enforce exactly `limit` flashcards
+    # Enforce exactly `limit` flashcards using default safe list
     while len(flashcards) < limit:
         defaults = _get_default_flashcards(note_id, limit)
         for dfc in defaults:
@@ -289,44 +302,45 @@ def generate_local_quiz(context: str, quiz_id: uuid.UUID, limit: int = 3) -> Lis
                         distractors.append(candidate)
                 
                 choices = [definition] + distractors
-                # Shuffle choices deterministically based on term length so they look mixed
+                
+                # Shuffle choices deterministically
                 import random
-                # Set a deterministic seed per question to avoid raw random fluctuations
                 seed_val = sum(ord(c) for c in term)
                 rng = random.Random(seed_val)
                 rng.shuffle(choices)
                 
-                q = QuizQuestion(
-                    quiz_id=quiz_id,
-                    question_text=question_text,
-                    choices=choices,
-                    correct_answer=definition,
-                    explanation=f"The document states that '{term}' refers to: {definition}."
+                is_valid, _ = AIValidator.validate_quiz_question(
+                    question_text, choices, definition, f"The document states that '{term}' refers to: {definition}."
                 )
-                questions.append(q)
-                seen_questions.add(question_text)
-                if len(questions) >= limit:
-                    break
+                
+                if is_valid:
+                    q = QuizQuestion(
+                        quiz_id=quiz_id,
+                        question_text=question_text,
+                        choices=choices,
+                        correct_answer=definition,
+                        explanation=f"The document states that '{term}' refers to: {definition}."
+                    )
+                    questions.append(q)
+                    seen_questions.add(question_text)
+                    if len(questions) >= limit:
+                        break
 
     # Heuristic 2: Fill-in-the-blank questions
     if len(questions) < limit:
         for s, _ in ranked:
             clean_s = s.replace("**", "").replace("__", "").strip()
-            # Look for a good key noun/word to blank out
             tokens = clean_and_tokenize(clean_s)
             if not tokens:
                 continue
-            # Find the most frequent token in the document that is present in the sentence
             tokens.sort(key=lambda t: word_freqs.get(t, 0), reverse=True)
             blank_word = tokens[0]
             
-            # Find case-preserved word in the sentence
             match = re.search(rf'\b({blank_word})\b', clean_s, re.IGNORECASE)
             if not match:
                 continue
             actual_word = match.group(1)
             
-            # Create question by replacing word with blank line
             blanked_sentence = re.sub(rf'\b{actual_word}\b', "________", clean_s, flags=re.IGNORECASE)
             question_text = f"Complete the following statement from the document: \"{blanked_sentence}\""
             
@@ -338,23 +352,29 @@ def generate_local_quiz(context: str, quiz_id: uuid.UUID, limit: int = 3) -> Lis
                         distractors.append(candidate)
                         
                 choices = [actual_word.capitalize()] + distractors
+                
                 import random
                 rng = random.Random(sum(ord(c) for c in actual_word))
                 rng.shuffle(choices)
                 
-                q = QuizQuestion(
-                    quiz_id=quiz_id,
-                    question_text=question_text,
-                    choices=choices,
-                    correct_answer=actual_word.capitalize(),
-                    explanation=f"The correct sentence is: \"{clean_s}\"."
+                is_valid, _ = AIValidator.validate_quiz_question(
+                    question_text, choices, actual_word.capitalize(), f"The correct sentence is: \"{clean_s}\"."
                 )
-                questions.append(q)
-                seen_questions.add(question_text)
-                if len(questions) >= limit:
-                    break
+                
+                if is_valid:
+                    q = QuizQuestion(
+                        quiz_id=quiz_id,
+                        question_text=question_text,
+                        choices=choices,
+                        correct_answer=actual_word.capitalize(),
+                        explanation=f"The correct sentence is: \"{clean_s}\"."
+                    )
+                    questions.append(q)
+                    seen_questions.add(question_text)
+                    if len(questions) >= limit:
+                        break
 
-    # Enforce exactly `limit` questions
+    # Enforce exactly `limit` questions using default safe list
     while len(questions) < limit:
         defaults = _get_default_quiz_questions(quiz_id, limit)
         for dq in defaults:
