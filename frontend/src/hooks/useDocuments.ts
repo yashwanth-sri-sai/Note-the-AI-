@@ -112,7 +112,12 @@ export const useUploadDocument = () => {
       // Invalidate with the workspace-scoped key so only the right cache
       // entry gets refreshed.
       queryClient.invalidateQueries({ queryKey: ["documents", activeWorkspaceId] });
-      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] });
+      // Use exact:false to match all ["knowledgeSources", workspaceId, *] entries
+      // regardless of the includeProcessing parameter variant.
+      // This fixes the staleness bug where new uploads weren't appearing in
+      // Flashcards/Quizzes pages because the partial-key invalidation was not
+      // matching the full ["knowledgeSources", activeWorkspaceId, {includeProcessing}] key.
+      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"], exact: false });
     },
   });
 };
@@ -128,7 +133,7 @@ export const useDeleteDocument = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents", activeWorkspaceId] });
-      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"], exact: false });
     },
   });
 };

@@ -13,7 +13,7 @@ read-side abstraction that normalizes the two existing tables.
 import uuid
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
@@ -42,7 +42,7 @@ class KnowledgeService:
         # 1. Fetch all documents in this workspace
         doc_stmt = select(Document).where(Document.workspace_id == workspace_id)
         if not include_processing:
-            doc_stmt = doc_stmt.where(Document.status == "completed")
+            doc_stmt = doc_stmt.where(func.lower(Document.status) == "completed")
         doc_res = await self.db.execute(doc_stmt)
         documents = doc_res.scalars().all()
 
@@ -131,7 +131,7 @@ class KnowledgeService:
             .join(Document, DocumentChunk.document_id == Document.id)
             .where(Document.id == doc_id)
             .where(Document.workspace_id == workspace_id)
-            .where(Document.status == "completed")
+            .where(func.lower(Document.status) == "completed")
             .order_by(DocumentChunk.chunk_index)
             .limit(limit)
         )
