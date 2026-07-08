@@ -23,6 +23,7 @@ interface UIState {
   activeNoteId: string | null;
   pendingAIQuery: string | null;
   isFocusMode: boolean;
+  aiPanelOpen: boolean;
 
   toggleTheme: () => void;
   setTheme: (theme: "light" | "dark" | "system") => void;
@@ -36,6 +37,8 @@ interface UIState {
   setActiveNoteId: (id: string | null) => void;
   setPendingAIQuery: (query: string | null) => void;
   resetFilters: () => void;
+  toggleAIPanel: () => void;
+  setAIPanelOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => {
@@ -87,6 +90,7 @@ export const useUIStore = create<UIState>((set) => {
     activeNoteId: null,
     pendingAIQuery: null,
     isFocusMode: false,
+    aiPanelOpen: false,
 
     toggleTheme: () =>
       set((state) => {
@@ -140,5 +144,9 @@ export const useUIStore = create<UIState>((set) => {
     setPendingAIQuery: (query) => set({ pendingAIQuery: query }),
 
     resetFilters: () => set({ activeFolderId: null, activeTagId: null }),
+
+    toggleAIPanel: () => set((state) => ({ aiPanelOpen: !state.aiPanelOpen })),
+
+    setAIPanelOpen: (open) => set({ aiPanelOpen: open }),
   };
 });

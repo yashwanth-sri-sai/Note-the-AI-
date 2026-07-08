@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, Suspense } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { PageSkeleton } from "@/components/layout/PageSkeleton";
 import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
@@ -30,6 +30,8 @@ import { EvaluationDashboardV2 } from "./EvaluationDashboardV2";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { getNotePreview } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { AIAssistantPanel } from "@/components/workspace/AIAssistantPanel";
+import { WorkspacePanelToggle } from "@/components/workspace/WorkspacePanelToggle";
 
 export const DashboardV2: React.FC = () => {
   const { user, logout } = useAuthStore();
@@ -46,6 +48,7 @@ export const DashboardV2: React.FC = () => {
     setActiveTagId,
     setActiveNoteId,
     isFocusMode,
+    aiPanelOpen,
   } = useUIStore();
 
   const { data: notes } = useNotes();
@@ -735,6 +738,11 @@ export const DashboardV2: React.FC = () => {
 
             {/* Header Action Items */}
             <div className="flex items-center gap-3.5 relative">
+              {/* AI Panel Toggle */}
+              {!isMobile && (
+                <WorkspacePanelToggle />
+              )}
+
               {/* Notifications Bell */}
               <button
                 onClick={() => alert("Notifications center is empty.")}
@@ -806,13 +814,33 @@ export const DashboardV2: React.FC = () => {
         <main className="flex-grow p-6 overflow-y-auto scrollbar bg-background">
           <Suspense fallback={<PageSkeleton />}>
             <AnimatePresence mode="wait">
-              <PageTransition pageKey={location.pathname}>
-                <Outlet />
+              <PageTransition pageKey={activeTab}>
+                {renderContent()}
               </PageTransition>
             </AnimatePresence>
           </Suspense>
         </main>
       </div>
+
+      {/* ── Right AI Assistant Panel (three-panel workspace) ───────── */}
+      {!isMobile && !isFocusMode && (
+        <motion.aside
+          animate={{
+            width: aiPanelOpen ? 360 : 0,
+            opacity: aiPanelOpen ? 1 : 0,
+          }}
+          transition={{
+            width: { type: "spring", stiffness: 260, damping: 28 },
+            opacity: { duration: 0.2, ease: "easeOut" },
+          }}
+          className="shrink-0 h-screen overflow-hidden z-20 relative"
+          aria-hidden={!aiPanelOpen}
+        >
+          <div className="w-[360px] h-full">
+            <AIAssistantPanel />
+          </div>
+        </motion.aside>
+      )}
 
       {/* Spotlight Search Modal (Ctrl+K) */}
       <AnimatePresence>
