@@ -29,12 +29,17 @@ router = APIRouter()
 
 @router.get("/sources", response_model=List[KnowledgeSourceResponse])
 async def list_knowledge_sources(
-    include_processing: bool = False,
+    # Default True: return all documents regardless of processing state.
+    # The frontend is responsible for determining which documents are selectable
+    # based on their status. Filtering at the API layer caused documents with
+    # uppercase pipeline statuses ("COMPLETED") to be silently excluded when
+    # the old lowercase filter (status == "completed") was active.
+    include_processing: bool = True,
     current_user: User = Depends(get_current_user),
     workspace_id: UUID = Depends(get_current_workspace_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all knowledge sources (notes + completed documents) in the active workspace."""
+    """List all knowledge sources (notes + documents) in the active workspace."""
     ks = KnowledgeService(db)
     return await ks.get_workspace_sources(workspace_id, include_processing=include_processing)
 

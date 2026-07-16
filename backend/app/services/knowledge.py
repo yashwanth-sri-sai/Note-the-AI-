@@ -90,6 +90,17 @@ class KnowledgeService:
 
         # 5. Sort by updated_at descending (most recent first)
         sources.sort(key=lambda s: s.updated_at, reverse=True)
+
+        # Diagnostic audit log — visible in Railway logs
+        doc_ids = [str(d.id) for d in documents]
+        logger.info(
+            f"[KNOWLEDGE SOURCES] workspace={workspace_id} "
+            f"include_processing={include_processing} "
+            f"docs_returned={len(documents)} "
+            f"notes_returned={len(pure_notes)} "
+            f"total={len(sources)} "
+            f"doc_ids={doc_ids}"
+        )
         return sources
 
     async def get_source_context(

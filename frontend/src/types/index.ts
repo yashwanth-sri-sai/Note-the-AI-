@@ -60,7 +60,11 @@ export interface KnowledgeSource {
   id: string;
   source_type: SourceType;
   title: string;
-  status: "pending" | "processing" | "completed" | "failed" | "ready";
+  // Status can be lowercase (legacy/notes: "pending", "processing", "completed", "failed", "ready")
+  // or uppercase (current ingestion pipeline: "UPLOADED", "TEXT_EXTRACTED", "CHUNKED",
+  // "EMBEDDED", "FLASHCARDS_READY", "QUIZZES_READY", "COMPLETED", "FAILED").
+  // Always normalize with .toLowerCase() before comparing.
+  status: string;
   created_at: string;
   updated_at: string;
   metadata: {

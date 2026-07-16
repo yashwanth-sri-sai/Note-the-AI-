@@ -45,11 +45,17 @@ export const KnowledgeSourcePicker: React.FC<KnowledgeSourcePickerProps> = ({
       return false;
     }
 
-    // 3. Status filters (hide non-completed documents if allowProcessing is false)
+    // 3. Status filter — show processing docs so user can see pipeline state.
+    // NOTE: normalize to lowercase before comparing because the ingestion pipeline
+    // writes uppercase statuses ("COMPLETED", "UPLOADED", etc.) which are passed
+    // through the API verbatim. A case-sensitive "!== 'completed'" would hide
+    // every document that has status "COMPLETED" (all successfully processed ones).
+    // We only hide documents when allowProcessing=false AND the doc is genuinely
+    // not ready — i.e. status is not completed in any casing.
     if (
       !allowProcessing &&
       source.source_type === "document" &&
-      source.status !== "completed"
+      source.status.toLowerCase() !== "completed"
     ) {
       return false;
     }

@@ -52,10 +52,17 @@ export const KnowledgeSourceCard: React.FC<KnowledgeSourceCardProps> = ({
     }
   };
 
+  // Normalize to lowercase once so all comparisons are case-insensitive.
+  // The ingestion pipeline stores uppercase statuses ("UPLOADED", "COMPLETED", etc.)
+  // while the type contract uses lowercase. Normalizing here handles both.
+  const statusNorm = source.status.toLowerCase();
+  const isReady = statusNorm === "completed" || statusNorm === "ready";
+  const isProcessing = !isReady && statusNorm !== "failed";
+
   return (
     <button
       onClick={onClick}
-      disabled={source.status === "pending" || source.status === "processing"}
+      disabled={isProcessing}
       className={`w-full text-left p-3.5 rounded-2xl transition-all duration-300 flex items-start gap-3 border ${
         isSelected
           ? isDoc
@@ -63,7 +70,7 @@ export const KnowledgeSourceCard: React.FC<KnowledgeSourceCardProps> = ({
             : "bg-primary/10 border-primary/30 text-primary shadow-md"
           : "bg-card/45 hover:bg-card/90 text-muted-foreground hover:text-foreground border-border/40"
       } ${
-        (source.status === "pending" || source.status === "processing")
+        isProcessing
           ? "opacity-60 cursor-not-allowed"
           : "cursor-pointer"
       }`}
@@ -85,7 +92,7 @@ export const KnowledgeSourceCard: React.FC<KnowledgeSourceCardProps> = ({
             {source.source_type}
           </span>
           <span className="text-muted-foreground/60">{getFormattedTime()}</span>
-          {isDoc && source.status !== "completed" && (
+          {isDoc && !isReady && (
             <KnowledgeSourceBadge status={source.status} />
           )}
         </div>
