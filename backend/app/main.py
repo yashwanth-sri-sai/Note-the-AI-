@@ -271,3 +271,34 @@ async def health_vector():
     if reranker_breaker.state == "OPEN":
         return {"status": "degraded", "message": "Reranker circuit breaker is open."}
     return {"status": "healthy"}
+
+
+# =========================================================================
+# /api/v1/health/* — versioned aliases so Railway health checks,
+# the frontend, and external monitors can use either base path.
+# These delegate to the same handlers defined above.
+# =========================================================================
+
+@app.get(f"{settings.API_V1_STR}/health", tags=["Health"])
+async def api_health_check(db: AsyncSession = Depends(get_db)):
+    return await health_check(db)
+
+@app.get(f"{settings.API_V1_STR}/health/liveness", tags=["Health"])
+async def api_health_liveness():
+    return await health_liveness()
+
+@app.get(f"{settings.API_V1_STR}/health/readiness", tags=["Health"])
+async def api_health_readiness(db: AsyncSession = Depends(get_db)):
+    return await health_readiness(db)
+
+@app.get(f"{settings.API_V1_STR}/health/db", tags=["Health"])
+async def api_health_db(db: AsyncSession = Depends(get_db)):
+    return await health_db(db)
+
+@app.get(f"{settings.API_V1_STR}/health/llm", tags=["Health"])
+async def api_health_llm():
+    return await health_llm()
+
+@app.get(f"{settings.API_V1_STR}/health/vector", tags=["Health"])
+async def api_health_vector():
+    return await health_vector()
