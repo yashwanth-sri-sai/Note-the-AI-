@@ -266,8 +266,11 @@ export const NotesPage: React.FC = () => {
       let tempContent = "";
       let tempFootnotes = "";
       let finalMetadata: any = null;
+      let doneStreaming = false;
 
-      while (true) {
+      console.log("[FRONTEND_STREAM_STARTED]", { convId, query: queryToSend.slice(0, 80) });
+
+      while (!doneStreaming) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -279,7 +282,10 @@ export const NotesPage: React.FC = () => {
           const line = part.trim();
           if (!line) continue;
 
-          if (line === "data: [DONE]") break;
+          if (line === "data: [DONE]") {
+            doneStreaming = true;
+            break;
+          }
 
           if (line.startsWith("data: ")) {
             const dataJsonStr = line.slice(6);
@@ -314,6 +320,8 @@ export const NotesPage: React.FC = () => {
                       : msg
                   )
                 );
+                doneStreaming = true;
+                break;
               }
             } catch (err) {
               console.error(err);
@@ -321,6 +329,12 @@ export const NotesPage: React.FC = () => {
           }
         }
       }
+
+      console.log("[FRONTEND_STREAM_FINISHED]", {
+        contentLength: tempContent.length,
+        confidence: finalMetadata?.confidence_score,
+        model: finalMetadata?.model_used,
+      });
 
       setCopilotMessages((prev) =>
         prev.map((msg) =>

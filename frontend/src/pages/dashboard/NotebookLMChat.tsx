@@ -352,8 +352,11 @@ export const NotebookLMChat: React.FC = () => {
       let tempContent = "";
       let tempFootnotes = "";
       let finalMetadata: any = null;
+      let doneStreaming = false;
 
-      while (true) {
+      console.log("[FRONTEND_STREAM_STARTED]", { convId, question: finalQuery.slice(0, 80) });
+
+      while (!doneStreaming) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -366,6 +369,7 @@ export const NotebookLMChat: React.FC = () => {
           if (!line) continue;
 
           if (line === "data: [DONE]") {
+            doneStreaming = true;
             break;
           }
 
@@ -414,6 +418,8 @@ export const NotebookLMChat: React.FC = () => {
                       : msg
                   )
                 );
+                doneStreaming = true;
+                break;
               }
             } catch (jsonErr) {
               console.error("SSE parse error on line:", line, jsonErr);
@@ -422,7 +428,19 @@ export const NotebookLMChat: React.FC = () => {
         }
       }
 
-      // Stream finalized. Update the database record representation locally.
+      console.log("[FRONTEND_STREAM_FINISHED]", {
+        contentLength: tempContent.length,
+        footnotesLength: tempFootnotes.length,
+        confidence: finalMetadata?.confidence_score,
+        model: finalMetadata?.model_used,
+        citationsCount: finalMetadata?.citations?.length ?? 0,
+      });
+
+      // Stream finalized. Update the local state with the complete message.
+      // NOTE: We deliberately do NOT call fetchMessages() here because:
+      // 1. Local state already contains the complete, correct message.
+      // 2. The DB commit happens server-side before [DONE] is yielded.
+      // 3. Calling fetchMessages() would create a race condition and wipe the streamed content.
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === assistantMsgPlaceholderId
@@ -441,8 +459,7 @@ export const NotebookLMChat: React.FC = () => {
         )
       );
 
-      // Refresh messages list to make sure everything aligns with the DB saved version
-      fetchMessages(convId);
+
 
     } catch (err: any) {
       console.error("RAG Stream error:", err);
