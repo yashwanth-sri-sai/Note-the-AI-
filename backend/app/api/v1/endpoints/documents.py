@@ -86,10 +86,12 @@ async def run_document_ingestion_pipeline(
                 await _update(db)
 
     # 1. Initialize UPLOADED state
+    logger.info(f"[PIPELINE] PIPELINE_STARTED — doc={document_id}, job={job_id}")
     try:
         await update_status("UPLOADED")
+        logger.info(f"[PIPELINE] UPLOAD_COMPLETE — doc={document_id}")
     except Exception as e:
-        logger.error(f"Failed to initialize status: {e}")
+        logger.error(f"[PIPELINE] Failed to initialize UPLOADED status: {e}")
 
     # Load file bytes from storage if they were not passed (e.g. during startup recovery)
     _workspace_id = workspace_id
@@ -134,19 +136,27 @@ async def run_document_ingestion_pipeline(
                     await db.commit()
 
                 # Step A: Text Extraction
-                logger.info(f"Ingestion attempt {attempt}: Extracting text...")
+                logger.info(f"[PIPELINE] TEXT_EXTRACTION_STARTED — attempt={attempt}, doc={document_id}")
+                _t_extract = _time.perf_counter()
                 await update_status("TEXT_EXTRACTED", session=db)
-                
+
                 extractor = get_extractor(filename, content_type)
                 extracted_data = extractor.extract_unified(file_bytes)
                 unified_text = extracted_data["text"]
                 page_map = extracted_data["page_map"]
-                
+
                 if not unified_text.strip():
                     raise ValueError("No readable text content extracted from document.")
+
+                logger.info(
+                    f"[PIPELINE] TEXT_EXTRACTION_FINISHED — "
+                    f"chars={len(unified_text)}, pages={len(page_map)}, "
+                    f"elapsed={(_time.perf_counter()-_t_extract)*1000:.1f}ms"
+                )
                 
                 # Step B: Chunking
-                logger.info(f"Ingestion attempt {attempt}: Chunking document...")
+                logger.info(f"[PIPELINE] CHUNKING_STARTED — doc={document_id}")
+                _t_chunk = _time.perf_counter()
                 await update_status("CHUNKED", session=db)
                 
                 chunking_service = get_chunking_service()
@@ -182,9 +192,15 @@ async def run_document_ingestion_pipeline(
                     chunk_idx += 1
 
                 extracted_text = "\n\n".join([c["text"] for c in flat_chunks])
-                
+                logger.info(
+                    f"[PIPELINE] CHUNKING_FINISHED — "
+                    f"chunks={len(flat_chunks)}, "
+                    f"elapsed={(_time.perf_counter()-_t_chunk)*1000:.1f}ms"
+                )
+
                 # Step C: Embedding
-                logger.info(f"Ingestion attempt {attempt}: Checking existing chunks/embeddings...")
+                logger.info(f"[PIPELINE] EMBEDDINGS_STARTED — doc={document_id}, chunks={len(flat_chunks)}")
+                _t_embed = _time.perf_counter()
                 await update_status("EMBEDDED", session=db)
 
                 # Check if chunks already exist (Idempotency)
@@ -194,14 +210,18 @@ async def run_document_ingestion_pipeline(
 
                 if not existing_chunks:
                     # Chunks don't exist, generate and save them
-                    logger.info("Generating batch embeddings...")
+                    logger.info(f"[PIPELINE] Generating batch embeddings for {len(flat_chunks)} chunks...")
                     embedding_provider = get_embedding_provider()
                     texts_to_embed = [c["text"] for c in flat_chunks]
                     embedding_start = _time.perf_counter()
                     vectors = await embedding_provider.get_embeddings(texts_to_embed)
                     embedding_latency_ms = (_time.perf_counter() - embedding_start) * 1000.0
+                    logger.info(
+                        f"[PIPELINE] EMBEDDINGS_FINISHED — "
+                        f"vectors={len(vectors)}, elapsed={embedding_latency_ms:.1f}ms"
+                    )
 
-                    logger.info("Saving chunks and embeddings...")
+                    logger.info(f"[PIPELINE] VECTOR_INSERT_STARTED — chunks={len(flat_chunks)}")
                     for chunk_data, vector in zip(flat_chunks, vectors):
                         chunk = DocumentChunk(
                             document_id=document_id,
@@ -225,20 +245,32 @@ async def run_document_ingestion_pipeline(
                         )
                         db.add(embedding_record)
                     await db.commit()
+                    logger.info(
+                        f"[PIPELINE] VECTOR_INSERT_COMPLETE — "
+                        f"chunks={len(flat_chunks)}, "
+                        f"total_embed_elapsed={(_time.perf_counter()-_t_embed)*1000:.1f}ms"
+                    )
                 else:
-                    logger.info("Chunks and embeddings already exist. Skipping creation.")
+                    logger.info("[PIPELINE] Chunks and embeddings already exist. Skipping creation.")
 
             break # Success, break attempt loop!
             
         except Exception as e:
-            logger.error(f"Error on ingestion attempt {attempt}: {str(e)}")
+            logger.error(
+                f"[PIPELINE] PIPELINE_STAGE_FAILED — attempt={attempt}, doc={document_id}, "
+                f"error_type={type(e).__name__}, error={str(e)}"
+            )
             logger.error(traceback.format_exc())
-            
+
             # Determine if validation/unrecoverable error
             is_val = isinstance(e, (ValueError, TypeError, AttributeError)) or "MIME" in str(e)
             if is_val or attempt == max_retries:
-                # Mark as failed and raise/abort
+                # Mark as FAILED — never leave permanently PROCESSING
                 await update_status("FAILED", error_msg=str(e))
+                logger.error(
+                    f"[PIPELINE] DOCUMENT_FAILED — doc={document_id}, "
+                    f"reason={str(e)[:200]}"
+                )
                 # Update Note content to indicate failure
                 async with db_session_factory() as db:
                     note = await db.get(Note, document_id)
@@ -246,7 +278,7 @@ async def run_document_ingestion_pipeline(
                         note.content = f"Failed to process document: {str(e)}"
                         db.add(note)
                         await db.commit()
-                return # Abort ingestion pipeline
+                return  # Abort ingestion pipeline
 
             # Wait with exponential backoff
             logger.info(f"Retrying in {retry_delay} seconds...")
@@ -274,7 +306,8 @@ async def run_document_ingestion_pipeline(
 
     # Step D: Flashcard Generation (Resilient, try-except, idempotent)
     try:
-        logger.info("Initiating flashcard generation...")
+        logger.info(f"[PIPELINE] FLASHCARDS_STARTED — doc={document_id}")
+        _t_fc = _time.perf_counter()
         await update_status("FLASHCARDS_READY")
         async with db_session_factory() as db:
             # Check if flashcards already exist (Idempotency)
@@ -284,10 +317,15 @@ async def run_document_ingestion_pipeline(
             if not existing_fcs:
                 ai_service = AIService(db)
                 await ai_service.generate_note_flashcards(document_id, _workspace_id)
+                logger.info(
+                    f"[PIPELINE] FLASHCARDS_FINISHED — doc={document_id}, "
+                    f"elapsed={(_time.perf_counter()-_t_fc)*1000:.1f}ms"
+                )
             else:
-                logger.info("Flashcards already exist. Skipping generation.")
+                logger.info("[PIPELINE] Flashcards already exist. Skipping generation.")
     except Exception as e:
-        logger.error(f"Flashcard generation failed: {e}")
+        logger.error(f"[PIPELINE] FLASHCARDS_FAILED — doc={document_id}: {e}")
+        logger.error(traceback.format_exc())
         # Update last_error, but continue
         async with db_session_factory() as db:
             job = await db.get(ProcessingJob, job_id)
@@ -297,7 +335,8 @@ async def run_document_ingestion_pipeline(
 
     # Step E: Quiz Generation (Resilient, try-except, idempotent)
     try:
-        logger.info("Initiating quiz generation...")
+        logger.info(f"[PIPELINE] QUIZZES_STARTED — doc={document_id}")
+        _t_qz = _time.perf_counter()
         await update_status("QUIZZES_READY")
         async with db_session_factory() as db:
             # Check if quizzes already exist (Idempotency)
@@ -307,10 +346,15 @@ async def run_document_ingestion_pipeline(
             if not existing_qzs:
                 ai_service = AIService(db)
                 await ai_service.generate_note_quiz(document_id, _workspace_id)
+                logger.info(
+                    f"[PIPELINE] QUIZZES_FINISHED — doc={document_id}, "
+                    f"elapsed={(_time.perf_counter()-_t_qz)*1000:.1f}ms"
+                )
             else:
-                logger.info("Quizzes already exist. Skipping generation.")
+                logger.info("[PIPELINE] Quizzes already exist. Skipping generation.")
     except Exception as e:
-        logger.error(f"Quiz generation failed: {e}")
+        logger.error(f"[PIPELINE] QUIZZES_FAILED — doc={document_id}: {e}")
+        logger.error(traceback.format_exc())
         # Update last_error, but continue
         async with db_session_factory() as db:
             job = await db.get(ProcessingJob, job_id)
@@ -321,8 +365,6 @@ async def run_document_ingestion_pipeline(
     # Step F: Completed status
     try:
         await update_status("COMPLETED")
-        
-        # Log latency metrics
         document_processing_ms = (_time.perf_counter() - pipeline_start) * 1000.0
         asyncio.create_task(log_latency_metric(
             workspace_id=_workspace_id,
@@ -330,9 +372,14 @@ async def run_document_ingestion_pipeline(
             embedding_latency_ms=embedding_latency_ms,
             document_processing_ms=document_processing_ms,
         ))
-        logger.info(f"Ingestion pipeline completed successfully for document {document_id}.")
+        logger.info(
+            f"[PIPELINE] DOCUMENT_COMPLETED — doc={document_id}, "
+            f"total_elapsed={document_processing_ms:.1f}ms, "
+            f"embed_ms={embedding_latency_ms:.1f}ms"
+        )
     except Exception as e:
-        logger.error(f"Failed to finalize completed status: {e}")
+        logger.error(f"[PIPELINE] Failed to finalize COMPLETED status: {e}")
+        logger.error(traceback.format_exc())
 
 
 
