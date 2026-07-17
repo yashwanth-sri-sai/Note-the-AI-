@@ -1,14 +1,13 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { BrainCircuit, Home } from "lucide-react";
+import { Home } from "lucide-react";
+import { Logo } from "@/components/common/Logo";
 
 export const NotFound: React.FC = () => {
   return (
     <div className="flex h-screen w-screen flex-col items-center justify-center bg-background text-foreground">
       <div className="flex flex-col items-center text-center max-w-md px-6">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-6">
-          <BrainCircuit className="h-7 w-7" />
-        </span>
+        <Logo size={56} className="mb-6 animate-fadeIn" />
         <h1 className="text-6xl font-black tracking-tight text-primary mb-2">404</h1>
         <h2 className="text-xl font-bold tracking-tight text-foreground/90 mb-4">
           Lost in Workspace Orbit

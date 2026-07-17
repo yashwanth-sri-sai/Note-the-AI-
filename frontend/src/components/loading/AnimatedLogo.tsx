@@ -1,8 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { BrainCircuit } from "lucide-react";
-
-const MotionBrainCircuit = motion(BrainCircuit);
+import { Logo } from "../common/Logo";
 
 export const AnimatedLogo: React.FC = () => {
   // Respect user preference for reduced motion
@@ -95,12 +93,7 @@ export const AnimatedLogo: React.FC = () => {
         variants={shouldReduceMotion ? {} : iconContainerVariants}
         className="relative z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 via-indigo-500/5 to-transparent border border-primary/20 shadow-[0_0_30px_rgba(93,124,255,0.08)]"
       >
-        <MotionBrainCircuit
-          className="h-8.5 w-8.5 text-primary"
-          initial={shouldReduceMotion ? {} : { strokeDasharray: "100", strokeDashoffset: "100" }}
-          animate={shouldReduceMotion ? {} : { strokeDashoffset: 0 }}
-          transition={{ duration: 1.5, ease: "easeOut" }}
-        />
+        <Logo size={44} animateOrbit={!shouldReduceMotion} />
       </motion.div>
 
       {/* Logo Text "NoteAI" with Premium Staggered Typography */}

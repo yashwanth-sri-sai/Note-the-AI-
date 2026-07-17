@@ -6,6 +6,7 @@ import * as z from "zod";
 import { BrainCircuit, Lock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Loader } from "../../components/ui/Loader";
 import { apiClient } from "@/lib/api-client";
+import { Logo } from "@/components/common/Logo";
 
 const resetSchema = z
   .object({
@@ -69,9 +70,7 @@ export const ResetPassword: React.FC = () => {
       <div className="w-full max-w-md space-y-6 glass-panel p-8 rounded-2xl shadow-xl border border-border/80 bg-card">
         {/* Header */}
         <div className="flex flex-col items-center text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-indigo-500 text-white shadow-md shadow-primary/20 mb-3">
-            <BrainCircuit className="h-6 w-6" />
-          </span>
+          <Logo size={88} className="mb-3 animate-fadeIn" />
           <h2 className="text-2xl font-bold tracking-tight">Reset Password</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Choose a new, secure password for your account

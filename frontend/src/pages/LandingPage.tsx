@@ -4,6 +4,7 @@ import { BrainCircuit, BookOpen, Tag, Star, ArrowRight, Sparkles, FolderKanban }
 import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { Logo } from "@/components/common/Logo";
 
 export const LandingPage: React.FC = () => {
   const { isAuthenticated } = useAuthStore();
@@ -18,10 +19,8 @@ export const LandingPage: React.FC = () => {
       {/* Top Header */}
       <header className="sticky top-0 z-50 w-full glass-panel transition-all duration-300">
         <div className="mx-auto flex max-w-7xl h-16 items-center justify-between px-6">
-          <div className="flex items-center gap-2 font-bold text-xl tracking-tight cursor-pointer" onClick={() => navigate("/")}>
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-primary to-indigo-500 text-white shadow-md shadow-primary/20">
-              <BrainCircuit className="h-5 w-5" />
-            </span>
+          <div className="flex items-center gap-3 font-bold text-xl tracking-tight cursor-pointer" onClick={() => navigate("/")}>
+            <Logo className="h-[34px] w-[34px] md:h-[40px] md:w-[40px] hover:scale-[1.03] transition-transform duration-200 ease-in-out" />
             <span className="bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">NoteAI</span>
           </div>
 

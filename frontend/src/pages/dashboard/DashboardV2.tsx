@@ -14,6 +14,7 @@ import {
   ChevronRight, Plus, Upload, ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Logo } from "@/components/common/Logo";
 import { PageTransition } from "@/components/motion/MotionSystem";
 import { DashboardOverview } from "./DashboardOverview";
 import { NotesPage } from "./NotesPage";
@@ -348,13 +349,11 @@ export const DashboardV2: React.FC = () => {
       <div className="flex flex-col justify-between h-full bg-gradient-to-b from-[#F7F9FC] via-[#F2F5FA] to-[#E2E8F0] dark:from-[#081018] dark:via-[#101A2C] dark:to-[#172338] border-r border-border">
         <div className="flex flex-col overflow-y-auto max-h-[calc(100vh-6rem)] flex-grow scrollbar">
           {/* Logo Brand */}
-          <div className="h-14 flex items-center px-4.5 gap-2.5 border-b border-border shrink-0">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10 border border-primary/20 text-primary shadow-[0_0_10px_rgba(79,209,197,0.15)] shrink-0 animate-pulse">
-              <BrainCircuit className="h-4.5 w-4.5" />
-            </span>
+          <div className="h-14 flex items-center px-4.5 gap-3 border-b border-border shrink-0">
+            <Logo size={32} className="hover:scale-[1.03] transition-transform duration-200 ease-in-out shrink-0" />
             {(!collapsed || isMobileView) && (
-              <span className="font-bold text-[10px] tracking-widest uppercase text-foreground/80">
-                NoteAI OS
+              <span className="font-bold text-sm tracking-tight text-foreground">
+                NoteAI
               </span>
             )}
           </div>

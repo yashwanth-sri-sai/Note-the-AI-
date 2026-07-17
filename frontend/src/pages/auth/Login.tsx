@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { BrainCircuit, Mail, Lock, AlertCircle, ArrowLeft } from "lucide-react";
 import { Loader } from "../../components/ui/Loader";
+import { Logo } from "@/components/common/Logo";
 import { useAuthStore } from "@/store/auth-store";
 
 const loginSchema = z.object({
@@ -78,9 +79,7 @@ export const Login: React.FC = () => {
           >
             <ArrowLeft className="h-3 w-3" /> Back
           </Link>
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-indigo-500 text-white shadow-md shadow-primary/20 mb-3">
-            <BrainCircuit className="h-6 w-6" />
-          </span>
+          <Logo size={88} className="mb-3 animate-fadeIn" />
           <h2 className="text-2xl font-bold tracking-tight">Welcome back</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Sign in to access your NoteAI dashboard

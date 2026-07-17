@@ -12,6 +12,7 @@ import {
   ChevronRight, Plus, Upload, ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Logo } from "@/components/common/Logo";
 import { DashboardOverview } from "./DashboardOverview";
 import { NotesPage } from "./NotesPage";
 import { FoldersPage } from "./FoldersPage";
@@ -248,12 +249,10 @@ export const Dashboard: React.FC = () => {
         <div className="flex flex-col overflow-y-auto max-h-[calc(100vh-6rem)] flex-grow scrollbar">
           {/* Logo Brand */}
           <div className="h-16 flex items-center px-4.5 gap-3 border-b border-border/30 shrink-0">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-primary to-indigo-500 text-white shadow-md shadow-primary/20 shrink-0 animate-pulse">
-              <BrainCircuit className="h-5 w-5" />
-            </span>
+            <Logo size={36} className="hover:scale-[1.03] transition-transform duration-200 ease-in-out shrink-0" />
             {(!collapsed || isMobileView) && (
-              <span className="font-extrabold text-xs tracking-wider uppercase text-foreground/90">
-                NoteAI Workspace
+              <span className="font-bold text-sm tracking-tight text-foreground">
+                NoteAI
               </span>
             )}
           </div>

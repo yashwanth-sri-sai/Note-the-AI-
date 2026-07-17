@@ -1,0 +1,138 @@
+import React from "react";
+
+interface LogoProps {
+  size?: number;
+  className?: string;
+  animateOrbit?: boolean;
+}
+
+export const Logo: React.FC<LogoProps> = ({
+  size = 40,
+  className = "",
+  animateOrbit = false,
+}) => {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 512 512"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={`${className} select-none`}
+    >
+      <defs>
+        <linearGradient id="orbit" x1="96" y1="96" x2="416" y2="416" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#23D5D5"/>
+          <stop offset="55%" stop-color="#3B82F6"/>
+          <stop offset="100%" stop-color="#8B5CF6"/>
+        </linearGradient>
+
+        <linearGradient id="bookGrad" x1="170" y1="150" x2="342" y2="362">
+          <stop offset="0%" stop-color="#0F172A"/>
+          <stop offset="100%" stop-color="#1E293B"/>
+        </linearGradient>
+
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="6" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+
+        <style>
+          {`
+            @keyframes orbit-spin {
+              from {
+                transform: rotate(0deg);
+              }
+              to {
+                transform: rotate(360deg);
+              }
+            }
+            .animate-orbit-spin {
+              animation: orbit-spin 8s linear infinite;
+            }
+          `}
+        </style>
+      </defs>
+
+      {/* Orbit and Nodes group */}
+      <g
+        className={animateOrbit ? "animate-orbit-spin" : ""}
+        style={{ transformOrigin: "256px 256px" }}
+      >
+        {/* Orbit */}
+        <circle
+          cx="256"
+          cy="256"
+          r="170"
+          stroke="url(#orbit)"
+          stroke-width="10"
+          stroke-linecap="round"
+          stroke-dasharray="18 14"
+          fill="none"
+        />
+
+        {/* Orbit Nodes */}
+        <circle cx="256" cy="86" r="16" fill="#22D3EE"/>
+        <circle cx="426" cy="256" r="16" fill="#6366F1"/>
+        <circle cx="256" cy="426" r="16" fill="#3B82F6"/>
+        <circle cx="86" cy="256" r="16" fill="#06B6D4"/>
+      </g>
+
+      {/* Notebook */}
+      <rect
+        x="166"
+        y="136"
+        width="180"
+        height="240"
+        rx="34"
+        fill="url(#bookGrad)"
+      />
+
+      {/* Folded Corner */}
+      <path
+        d="M312 136 L346 170 L346 136 Z"
+        fill="#38BDF8"
+        opacity="0.95"
+      />
+
+      {/* Bookmark */}
+      <path
+        d="M236 330 V392 L256 374 L276 392 V330"
+        fill="url(#orbit)"
+      />
+
+      {/* Knowledge Core */}
+      <circle
+        cx="256"
+        cy="256"
+        r="56"
+        fill="url(#orbit)"
+        filter="url(#glow)"
+      />
+
+      {/* Neural Connections */}
+      <line x1="256" y1="200" x2="256" y2="86"
+            stroke="url(#orbit)"
+            stroke-width="6"
+            stroke-linecap="round"/>
+
+      <line x1="312" y1="256" x2="426" y2="256"
+            stroke="url(#orbit)"
+            stroke-width="6"
+            stroke-linecap="round"/>
+
+      <line x1="256" y1="312" x2="256" y2="426"
+            stroke="url(#orbit)"
+            stroke-width="6"
+            stroke-linecap="round"/>
+
+      <line x1="200" y1="256" x2="86" y2="256"
+            stroke="url(#orbit)"
+            stroke-width="6"
+            stroke-linecap="round"/>
+    </svg>
+  );
+};

@@ -6,6 +6,7 @@ import * as z from "zod";
 import { BrainCircuit, Mail, AlertCircle, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { Loader } from "../../components/ui/Loader";
 import { apiClient } from "@/lib/api-client";
+import { Logo } from "@/components/common/Logo";
 
 const forgotSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }),
@@ -56,9 +57,7 @@ export const ForgotPassword: React.FC = () => {
           >
             <ArrowLeft className="h-3 w-3" /> Back to Login
           </Link>
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-indigo-500 text-white shadow-md shadow-primary/20 mb-3">
-            <BrainCircuit className="h-6 w-6" />
-          </span>
+          <Logo size={88} className="mb-3 animate-fadeIn" />
           <h2 className="text-2xl font-bold tracking-tight">Forgot Password</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Enter your email and we'll send you a password reset link

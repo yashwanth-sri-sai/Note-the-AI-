@@ -6,6 +6,7 @@ import * as z from "zod";
 import { BrainCircuit, Mail, Lock, User, AlertCircle, ArrowLeft } from "lucide-react";
 import { Loader } from "../../components/ui/Loader";
 import { useAuthStore } from "@/store/auth-store";
+import { Logo } from "@/components/common/Logo";
 
 const registerSchema = z
   .object({
@@ -81,9 +82,7 @@ export const Register: React.FC = () => {
           >
             <ArrowLeft className="h-3 w-3" /> Back
           </Link>
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-indigo-500 text-white shadow-md shadow-primary/20 mb-3">
-            <BrainCircuit className="h-6 w-6" />
-          </span>
+          <Logo size={88} className="mb-3 animate-fadeIn" />
           <h2 className="text-2xl font-bold tracking-tight">Create your account</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Get started with your AI-powered knowledge base

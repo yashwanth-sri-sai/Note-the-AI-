@@ -1,0 +1,15 @@
+{
+  "short_name": "NoteAI",
+  "name": "NoteAI - AI-Powered Knowledge Management",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0B0C10",
+  "theme_color": "#3B82F6",
+  "display": "standalone"
+}
