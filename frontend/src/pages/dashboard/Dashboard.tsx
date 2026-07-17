@@ -283,7 +283,7 @@ export const Dashboard: React.FC = () => {
                   className={`relative flex items-center gap-3 w-full px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-200 group ${
                     isActive
                       ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/10"
+                      : "text-secondary-text hover:text-primary-text hover:bg-secondary hover:-translate-y-0.5"
                   }`}
                 >
                   {isActive && (
@@ -311,7 +311,7 @@ export const Dashboard: React.FC = () => {
                     setExpandFolders(!expandFolders);
                   }
                 }}
-                className={`flex items-center justify-between w-full px-3 py-2 text-xs font-semibold rounded-xl text-muted-foreground hover:bg-muted/10 hover:text-foreground transition-all duration-200`}
+                className={`flex items-center justify-between w-full px-3 py-2 text-xs font-semibold rounded-xl text-secondary-text hover:bg-secondary hover:text-primary-text transition-all duration-200`}
               >
                 <span className="flex items-center gap-3">
                   <Folder className="h-4 w-4 shrink-0 text-primary" />
@@ -335,7 +335,7 @@ export const Dashboard: React.FC = () => {
                         if (isMobileView) setMobileSidebarOpen(false);
                       }}
                       className={`flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-[11px] font-semibold rounded-lg truncate hover:text-primary transition-colors ${
-                        activeFolderId === f.id ? "text-primary bg-primary/5 font-bold" : "text-muted-foreground"
+                        activeFolderId === f.id ? "text-primary bg-primary/5 font-bold" : "text-secondary-text"
                       }`}
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-primary/80 shrink-0" />
@@ -354,7 +354,6 @@ export const Dashboard: React.FC = () => {
                 </div>
               )}
             </div>
-
             {/* Favorites */}
             <button
               onClick={() => {
@@ -363,8 +362,8 @@ export const Dashboard: React.FC = () => {
               }}
               className={`relative flex items-center gap-3 w-full px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-200 group ${
                 activeTab === "favorites"
-                  ? "text-amber"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/10"
+                  ? "text-primary"
+                  : "text-secondary-text hover:text-primary-text hover:bg-secondary hover:-translate-y-0.5"
               }`}
             >
               {activeTab === "favorites" && (
@@ -390,7 +389,7 @@ export const Dashboard: React.FC = () => {
                     setExpandTags(!expandTags);
                   }
                 }}
-                className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted/10 hover:text-foreground rounded-xl transition-all duration-200"
+                className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold text-secondary-text hover:bg-secondary hover:text-primary-text rounded-xl transition-all duration-200"
               >
                 <span className="flex items-center gap-3">
                   <Tag className="h-4 w-4 shrink-0 text-violet" />
@@ -414,7 +413,7 @@ export const Dashboard: React.FC = () => {
                         if (isMobileView) setMobileSidebarOpen(false);
                       }}
                       className={`flex items-center gap-2.5 w-full text-left px-2.5 py-1.5 text-[11px] font-semibold rounded-lg truncate hover:text-primary transition-colors ${
-                        activeTagId === t.id ? "text-primary bg-primary/5 font-bold" : "text-muted-foreground"
+                        activeTagId === t.id ? "text-primary bg-primary/5 font-bold" : "text-secondary-text"
                       }`}
                     >
                       <span
@@ -446,7 +445,7 @@ export const Dashboard: React.FC = () => {
               className={`relative flex items-center gap-3 w-full px-3 py-2 text-xs font-semibold rounded-xl transition-all duration-200 group ${
                 activeTab === "settings"
                   ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/10"
+                  : "text-secondary-text hover:text-primary-text hover:bg-secondary hover:-translate-y-0.5"
               }`}
             >
               {activeTab === "settings" && (
@@ -457,7 +456,7 @@ export const Dashboard: React.FC = () => {
                 />
               )}
               <span className="relative z-10 flex items-center gap-3 w-full">
-                <Settings className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <Settings className="h-4 w-4 shrink-0 text-secondary-text group-hover:text-primary-text" />
                 {(!collapsed || isMobileView) && <span>Settings</span>}
               </span>
             </button>
@@ -465,12 +464,12 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* Sidebar Footer */}
-        <div className="p-3 border-t border-border/30 space-y-3 shrink-0 bg-sidebar/50">
+        <div className="p-3 border-t border-border space-y-3 shrink-0 bg-sidebar/50">
           {/* User Profile Card */}
           {(!collapsed || isMobileView) && (
-            <div className="p-2.5 rounded-2xl bg-card/45 border border-border/40 flex items-center justify-between gap-2.5">
+            <div className="p-2.5 rounded-2xl bg-card border border-border flex items-center justify-between gap-2.5 shadow-sm">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="h-8 w-8 rounded-full overflow-hidden border border-border/80 flex items-center justify-center bg-muted shrink-0 shadow-inner">
+                <div className="h-8 w-8 rounded-full overflow-hidden border border-border flex items-center justify-center bg-secondary shrink-0 shadow-inner">
                   {user?.avatar_url ? (
                     <img
                       src={
@@ -488,10 +487,10 @@ export const Dashboard: React.FC = () => {
                   )}
                 </div>
                 <div className="text-left min-w-0">
-                  <h4 className="font-bold text-xs truncate text-foreground leading-none">
+                  <h4 className="font-bold text-xs truncate text-primary-text leading-none">
                     {user?.name || "User"}
                   </h4>
-                  <p className="text-[9px] text-muted-foreground truncate mt-0.5 font-medium">
+                  <p className="text-[9px] text-muted-text truncate mt-0.5 font-medium">
                     {user?.email}
                   </p>
                 </div>
@@ -504,7 +503,7 @@ export const Dashboard: React.FC = () => {
             <button
               onClick={toggleTheme}
               title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-              className="flex items-center justify-center rounded-xl hover:bg-muted/40 py-2 border border-border/40 text-muted-foreground hover:text-foreground transition-all duration-200"
+              className="flex items-center justify-center rounded-xl hover:bg-secondary py-2 border border-border text-muted-text hover:text-primary-text transition-all duration-200"
             >
               {theme === "dark" ? (
                 <Sun className="h-4 w-4 text-yellow-500 shrink-0" />
@@ -515,7 +514,7 @@ export const Dashboard: React.FC = () => {
             <button
               onClick={handleLogout}
               title="Log Out"
-              className="flex items-center justify-center rounded-xl hover:bg-red-500/10 py-2 border border-border/40 text-red-500 transition-colors duration-200"
+              className="flex items-center justify-center rounded-xl hover:bg-red-500/10 py-2 border border-border text-red-500 transition-colors duration-200"
             >
               <LogOut className="h-4 w-4 shrink-0" />
             </button>

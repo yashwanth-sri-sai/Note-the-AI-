@@ -257,40 +257,40 @@ export const QuizzesPage: React.FC = () => {
             </motion.div>
           ) : !activeQuiz ? (
             <motion.div
-              key="quiz-select"
+              key="quiz-list"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex-grow flex flex-col h-full overflow-hidden clay-panel"
+              className="flex-grow flex flex-col h-full bg-[#0B0C10]/20 rounded-3xl border border-white/[0.03] overflow-hidden"
             >
-              <div className="p-4 border-b border-border/40 flex justify-between items-center bg-card/10 shrink-0">
-                <div className="text-left">
-                  <h3 className="font-extrabold text-sm text-foreground flex items-center gap-2">
-                    <span>{selectedSourceType === "document" ? "📄" : "📝"}</span>
-                    Quizzes for: {sourceName}
-                  </h3>
-                  <p className="text-[10px] text-muted-foreground">Select a quiz below or generate a new one.</p>
+              <div className="flex items-center justify-between border-b border-white/[0.04] p-5.5 bg-white/[0.015] shrink-0">
+                <div>
+                  <h3 className="font-extrabold text-sm text-foreground">Generated Quizzes</h3>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Select a quiz to test your memory or create a new one</p>
                 </div>
                 <motion.button
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={handleGenerateQuiz}
                   disabled={isGenerating}
-                  className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold clay-btn-primary disabled:opacity-50 shadow-sm"
+                  className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-primary/20 hover:bg-primary/95 disabled:opacity-50 transition-all cursor-pointer"
                 >
                   {isGenerating ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <>
+                      <Loader size="xs" /> Generating...
+                    </>
                   ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <>
+                      <Sparkles className="h-3.5 w-3.5" /> New Quiz
+                    </>
                   )}
-                  Generate Quiz
                 </motion.button>
               </div>
 
               <div className="flex-grow overflow-y-auto p-6 space-y-3 scrollbar text-left">
                 {quizzes.length === 0 ? (
                   <div className="text-center py-12 space-y-2">
-                    <HelpCircle className="h-8 w-8 text-muted-foreground/35 mx-auto" />
+                    <HelpCircle className="h-8 w-8 text-muted-text mx-auto" />
                     <p className="text-xs text-muted-foreground">No quizzes generated for this source yet.</p>
                   </div>
                 ) : (

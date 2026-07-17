@@ -7,47 +7,47 @@
 /* ─── LIGHT MODE (default :root) ──────────────────────────────────────────── */
 @layer base {
   :root {
-    /* Page canvas — cream paper, not white */
-    --background: 213 33% 97%;         /* #F7F9FC */
-    --foreground: 216 43% 14%;         /* #142033 */
+    /* Page canvas — clean slate */
+    --background: 210 40% 98%;         /* #F8FAFC */
+    --foreground: 221 39% 11%;         /* #111827 */
 
     /* Surface layers */
     --surface: 0 0% 100%;              /* #FFFFFF */
     --surface-secondary: 216 30% 95%; /* #F2F5FA */
-    --sidebar: 216 30% 95%;           /* #F2F5FA */
+    --sidebar: 210 40% 98%;           /* #F8FAFC */
 
     /* Card */
     --card: 0 0% 100%;                 /* #FFFFFF */
-    --card-foreground: 216 43% 14%;   /* #142033 */
+    --card-foreground: 221 39% 11%;   /* #111827 */
 
     /* Popover */
     --popover: 0 0% 100%;
-    --popover-foreground: 216 43% 14%;
+    --popover-foreground: 221 39% 11%;
 
     /* Aurora brand colors — unchanged in both themes */
     --primary: 174 59% 56.5%;         /* #4FD1C5  Knowledge Cyan */
     --primary-hover: 174 59% 49%;
-    --primary-foreground: 216 43% 14%;
+    --primary-foreground: 221 39% 11%;
 
     /* Secondary */
     --secondary: 216 30% 95%;
-    --secondary-foreground: 215 21% 36%;  /* #46546A */
+    --secondary-foreground: 217 19% 27%;  /* #374151 */
 
     /* Muted */
     --muted: 216 25% 92%;
-    --muted-foreground: 215 14% 44%;   /* #718096 */
+    --muted-foreground: 220 9% 46%;   /* #6B7280 */
 
     /* Accent */
     --accent: 216 30% 95%;
-    --accent-foreground: 216 43% 14%;
+    --accent-foreground: 221 39% 11%;
 
     /* Destructive */
     --destructive: 351 100% 71%;       /* #FF6B81 */
     --destructive-foreground: 0 0% 100%;
 
     /* Border & Input */
-    --border: 215 20% 87%;             /* soft slate, ~rgba(20,32,51,0.10) */
-    --input: 215 20% 87%;
+    --border: 220 14% 91%;             /* #E5E7EB */
+    --input: 220 14% 91%;
     --ring: 174 59% 56.5%;
 
     --radius: 0.75rem;
@@ -59,9 +59,9 @@
     --rose: 351 100% 71%;             /* #FF6B81 Danger */
     --cyan: 174 59% 56.5%;            /* #4FD1C5 Knowledge Cyan */
 
-    --primary-text: 216 43% 14%;
-    --secondary-text: 215 21% 36%;
-    --muted-text: 215 14% 44%;
+    --primary-text: 221 39% 11%;       /* #111827 */
+    --secondary-text: 217 19% 27%;     /* #374151 */
+    --muted-text: 220 9% 46%;         /* #6B7280 */
 
     --success: 157 69% 58%;
     --warning: 42 90% 64.3%;
@@ -70,10 +70,10 @@
 
     /* Light-mode glass tokens */
     --glass-bg: rgba(255, 255, 255, 0.80);
-    --glass-border: rgba(20, 32, 51, 0.10);
+    --glass-border: rgba(17, 24, 39, 0.08);
     --clay-bg: rgba(255, 255, 255, 0.95);
-    --clay-border: rgba(20, 32, 51, 0.08);
-    --clay-shadow: 0 2px 16px rgba(20, 32, 51, 0.08), 0 1px 0 rgba(20,32,51,0.04) inset;
+    --clay-border: rgba(17, 24, 39, 0.06);
+    --clay-shadow: 0 2px 16px rgba(17, 24, 39, 0.04), 0 1px 0 rgba(17,24,39,0.02) inset;
   }
 
   /* ─── DARK MODE ─────────────────────────────────────────────────────────── */

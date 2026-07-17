@@ -85,8 +85,8 @@ export const FavoritesPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex justify-between items-center border-t border-border/40 pt-3 mt-3">
-                <span className="text-[10px] text-muted-foreground/80">
+              <div className="flex justify-between items-center border-t border-border pt-3 mt-3">
+                <span className="text-[10px] text-secondary-text">
                   Updated {new Date(note.updated_at).toLocaleDateString()}
                 </span>
                 <span className="flex items-center gap-1 text-[10px] font-semibold text-primary group-hover:translate-x-0.5 transition-transform">

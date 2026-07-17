@@ -186,7 +186,7 @@ export const FlashcardsPage: React.FC = () => {
               exit={{ opacity: 0 }}
               className="flex-grow flex flex-col items-center justify-center text-center p-8 space-y-4 clay-panel h-full"
             >
-              <Layers className="h-12 w-12 text-muted-foreground/45 animate-pulse" />
+              <Layers className="h-12 w-12 text-muted-text animate-pulse" />
               <div>
                 <h3 className="font-extrabold text-sm text-foreground">No source selected</h3>
                 <p className="text-xs text-muted-foreground max-w-xs mt-1 leading-relaxed">

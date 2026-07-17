@@ -384,7 +384,7 @@ export const DashboardV2: React.FC = () => {
                   className={`relative flex items-center gap-2.5 w-full px-2.5 py-2 text-[11px] font-semibold rounded-xl transition-all duration-200 group ${
                     isActive
                       ? "text-primary bg-primary/8 shadow-[0_0_12px_rgba(79,209,197,0.12)] border border-primary/20"
-                      : "text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.03] hover:-translate-y-0.5"
+                      : "text-secondary-text hover:text-primary-text hover:bg-secondary hover:-translate-y-0.5"
                   }`}
                 >
                   {isActive && (
@@ -397,8 +397,6 @@ export const DashboardV2: React.FC = () => {
                 </button>
               );
             })}
-
-            {/* Folders Accordion */}
             <div className="space-y-0.5">
               <button
                 onClick={() => {
@@ -408,7 +406,7 @@ export const DashboardV2: React.FC = () => {
                     setExpandFolders(!expandFolders);
                   }
                 }}
-                className={`flex items-center justify-between w-full px-2.5 py-2 text-[11px] font-medium rounded-lg text-muted-foreground/50 hover:bg-white/[0.02] hover:text-foreground/80 transition-all duration-150`}
+                className={`flex items-center justify-between w-full px-2.5 py-2 text-[11px] font-semibold rounded-lg text-secondary-text hover:bg-secondary hover:text-primary-text transition-all duration-150`}
               >
                 <span className="flex items-center gap-2.5">
                   <Folder className="h-4 w-4 shrink-0 text-primary" />
@@ -423,11 +421,11 @@ export const DashboardV2: React.FC = () => {
                 )}
               </button>
               {(!collapsed || isMobileView) && expandFolders && (
-                <div className="pl-5 pr-2 py-0.5 space-y-0.5 border-l border-white/[0.03] ml-4">
+                <div className="pl-5 pr-2 py-0.5 space-y-0.5 border-l border-border ml-4">
                   {foldersLoading ? (
                     <div className="space-y-1.5 py-1">
-                      <div className="h-2.5 w-16 rounded bg-white/[0.03] animate-pulse" />
-                      <div className="h-2.5 w-20 rounded bg-white/[0.03] animate-pulse" />
+                      <div className="h-2.5 w-16 rounded bg-secondary animate-pulse" />
+                      <div className="h-2.5 w-20 rounded bg-secondary animate-pulse" />
                     </div>
                   ) : foldersError ? (
                     <div className="py-1 px-1 text-[9px] text-red-400 flex items-center justify-between gap-2">
@@ -448,8 +446,8 @@ export const DashboardV2: React.FC = () => {
                             setActiveFolderId(f.id);
                             if (isMobileView) setMobileSidebarOpen(false);
                           }}
-                          className={`flex items-center gap-2 w-full text-left px-2 py-1 text-[10px] font-medium rounded truncate hover:text-primary transition-colors ${
-                            activeFolderId === f.id ? "text-primary bg-primary/5 font-semibold" : "text-muted-foreground/60"
+                          className={`flex items-center gap-2 w-full text-left px-2 py-1 text-[10px] font-semibold rounded truncate hover:text-primary transition-colors ${
+                            activeFolderId === f.id ? "text-primary bg-primary/5 font-bold" : "text-secondary-text"
                           }`}
                         >
                           <span className="w-1 h-1 rounded-full bg-primary/60 shrink-0" />
@@ -477,10 +475,10 @@ export const DashboardV2: React.FC = () => {
                 setActiveTab("favorites");
                 if (isMobileView) setMobileSidebarOpen(false);
               }}
-              className={`relative flex items-center gap-2.5 w-full px-2.5 py-2 text-[11px] font-medium rounded-lg transition-all duration-150 group ${
+              className={`relative flex items-center gap-2.5 w-full px-2.5 py-2 text-[11px] font-semibold rounded-lg transition-all duration-150 group ${
                 activeTab === "favorites"
-                  ? "text-foreground bg-white/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.3)] border border-white/[0.02]"
-                  : "text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.02]"
+                  ? "text-primary bg-primary/10 border border-primary/20"
+                  : "text-secondary-text hover:text-primary-text hover:bg-secondary"
               }`}
             >
               <span className="relative z-10 flex items-center gap-2.5 w-full">
@@ -499,7 +497,7 @@ export const DashboardV2: React.FC = () => {
                     setExpandTags(!expandTags);
                   }
                 }}
-                className="flex items-center justify-between w-full px-2.5 py-2 text-[11px] font-medium text-muted-foreground/50 hover:bg-white/[0.02] hover:text-foreground/80 rounded-lg transition-all duration-150"
+                className="flex items-center justify-between w-full px-2.5 py-2 text-[11px] font-semibold text-secondary-text hover:bg-secondary hover:text-primary-text rounded-lg transition-all duration-150"
               >
                 <span className="flex items-center gap-2.5">
                   <Tag className="h-4 w-4 shrink-0 text-violet" />
@@ -514,11 +512,11 @@ export const DashboardV2: React.FC = () => {
                 )}
               </button>
               {(!collapsed || isMobileView) && expandTags && (
-                <div className="pl-5 pr-2 py-0.5 space-y-0.5 border-l border-white/[0.03] ml-4">
+                <div className="pl-5 pr-2 py-0.5 space-y-0.5 border-l border-border ml-4">
                   {tagsLoading ? (
                     <div className="space-y-1.5 py-1">
-                      <div className="h-2.5 w-16 rounded bg-white/[0.03] animate-pulse" />
-                      <div className="h-2.5 w-20 rounded bg-white/[0.03] animate-pulse" />
+                      <div className="h-2.5 w-16 rounded bg-secondary animate-pulse" />
+                      <div className="h-2.5 w-20 rounded bg-secondary animate-pulse" />
                     </div>
                   ) : tagsError ? (
                     <div className="py-1 px-1 text-[9px] text-red-400 flex items-center justify-between gap-2">
@@ -539,8 +537,8 @@ export const DashboardV2: React.FC = () => {
                             setActiveTagId(t.id);
                             if (isMobileView) setMobileSidebarOpen(false);
                           }}
-                          className={`flex items-center gap-2 w-full text-left px-2 py-1 text-[10px] font-medium rounded truncate hover:text-primary transition-colors ${
-                            activeTagId === t.id ? "text-primary bg-primary/5 font-semibold" : "text-muted-foreground/60"
+                          className={`flex items-center gap-2 w-full text-left px-2 py-1 text-[10px] font-semibold rounded truncate hover:text-primary transition-colors ${
+                            activeTagId === t.id ? "text-primary bg-primary/5 font-bold" : "text-secondary-text"
                           }`}
                         >
                           <span
@@ -571,14 +569,14 @@ export const DashboardV2: React.FC = () => {
                 setActiveTab("settings");
                 if (isMobileView) setMobileSidebarOpen(false);
               }}
-              className={`relative flex items-center gap-2.5 w-full px-2.5 py-2 text-[11px] font-medium rounded-lg transition-all duration-150 group ${
+              className={`relative flex items-center gap-2.5 w-full px-2.5 py-2 text-[11px] font-semibold rounded-lg transition-all duration-150 group ${
                 activeTab === "settings"
-                  ? "text-foreground bg-white/[0.04] shadow-[0_1px_2px_rgba(0,0,0,0.3)] border border-white/[0.02]"
-                  : "text-muted-foreground/60 hover:text-foreground hover:bg-white/[0.02]"
+                  ? "text-primary bg-primary/10 border border-primary/20"
+                  : "text-secondary-text hover:text-primary-text hover:bg-secondary"
               }`}
             >
               <span className="relative z-10 flex items-center gap-2.5 w-full">
-                <Settings className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <Settings className="h-4 w-4 shrink-0 text-secondary-text group-hover:text-primary-text" />
                 {(!collapsed || isMobileView) && <span>Settings</span>}
               </span>
             </button>
@@ -590,7 +588,7 @@ export const DashboardV2: React.FC = () => {
           {(!collapsed || isMobileView) && (
             <div className="p-2 px-2.5 rounded-xl bg-surface border border-border flex items-center justify-between gap-2.5 shadow-sm">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="h-7 w-7 rounded-full overflow-hidden border border-border flex items-center justify-center bg-muted shrink-0 shadow-inner">
+                <div className="h-7 w-7 rounded-full overflow-hidden border border-border flex items-center justify-center bg-secondary shrink-0 shadow-inner">
                   {user?.avatar_url ? (
                     <img
                       src={
@@ -608,10 +606,10 @@ export const DashboardV2: React.FC = () => {
                   )}
                 </div>
                 <div className="text-left min-w-0">
-                  <h4 className="font-semibold text-[11px] truncate text-foreground/80 leading-none">
+                  <h4 className="font-semibold text-[11px] truncate text-primary-text leading-none">
                     {user?.name || "User"}
                   </h4>
-                  <p className="text-[9px] text-muted-foreground/45 truncate mt-0.5 font-medium">
+                  <p className="text-[9px] text-muted-text truncate mt-0.5 font-medium">
                     {user?.email}
                   </p>
                 </div>
@@ -625,7 +623,7 @@ export const DashboardV2: React.FC = () => {
             <button
               onClick={handleLogout}
               title="Log Out"
-              className="flex items-center justify-center rounded-lg hover:bg-red-500/5 py-1.5 border border-white/[0.04] text-red-400/80 transition-colors duration-150"
+              className="flex items-center justify-center rounded-lg hover:bg-red-500/10 py-1.5 border border-border text-red-500 transition-colors duration-150"
             >
               <LogOut className="h-3.5 w-3.5 shrink-0" />
             </button>
@@ -852,8 +850,8 @@ export const DashboardV2: React.FC = () => {
               transition={{ duration: 0.18, ease: "easeOut" }}
               className="w-full max-w-lg bg-surface/95 border border-white/[0.04] p-4 rounded-xl shadow-2xl space-y-3 bg-card"
             >
-              <div className="relative flex items-center border-b border-white/[0.04] pb-2">
-                <Search className="h-4.5 w-4.5 text-muted-foreground/45 mr-3 shrink-0" />
+              <div className="relative flex items-center border-b border-border pb-2">
+                <Search className="h-4.5 w-4.5 text-muted-text mr-3 shrink-0" />
                 <input
                   type="text"
                   autoFocus
@@ -861,14 +859,14 @@ export const DashboardV2: React.FC = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={handleModalKeyDown}
                   placeholder="Type note title or text to search..."
-                  className="bg-transparent border-none text-[12px] outline-none flex-grow placeholder:text-muted-foreground/45 focus:ring-0 w-full text-foreground/80"
+                  className="bg-transparent border-none text-[12px] outline-none flex-grow placeholder:text-muted-text focus:ring-0 w-full text-primary-text font-medium"
                 />
                 <button
                   onClick={() => {
                     setSearchQuery("");
                     setShowSearchModal(false);
                   }}
-                  className="text-muted-foreground/40 hover:text-foreground/60 rounded p-1 transition-colors"
+                  className="text-muted-text hover:text-primary-text rounded p-1 transition-colors"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -881,7 +879,7 @@ export const DashboardV2: React.FC = () => {
                     {/* Notes category */}
                     {searchNotes.length > 0 && (
                       <div className="space-y-1">
-                        <p className="text-[9px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40 px-2">
+                        <p className="text-[9px] uppercase tracking-[0.1em] font-bold text-muted-text px-2">
                           Notes ({searchNotes.length})
                         </p>
                         {searchNotes.slice(0, 3).map((note, index) => {
@@ -893,19 +891,19 @@ export const DashboardV2: React.FC = () => {
                               ref={isSelected ? selectedRef : undefined}
                               onClick={() => handleSearchResultClick("note", note.id)}
                               className={`p-2 rounded-lg cursor-pointer flex justify-between items-center gap-4 transition-all text-xs font-semibold ${
-                                isSelected ? "bg-white/[0.03]" : "hover:bg-white/[0.015]"
+                                isSelected ? "bg-secondary" : "hover:bg-secondary/50"
                               }`}
                             >
                               <div className="truncate flex-grow">
                                 <span className="flex items-center gap-2 truncate">
-                                  <span className="text-muted-foreground/60">📝</span>
-                                  <h4 className="truncate text-foreground/85 font-medium">{note.title || "Untitled Note"}</h4>
+                                  <span className="text-secondary-text">📝</span>
+                                  <h4 className="truncate text-primary-text font-semibold">{note.title || "Untitled Note"}</h4>
                                 </span>
-                                <p className="text-[10px] text-muted-foreground/50 truncate mt-0.5 pl-6 font-normal">
+                                <p className="text-[10px] text-secondary-text truncate mt-0.5 pl-6 font-normal">
                                   {getNotePreview(note.content, 90) || "Empty content..."}
                                 </p>
                               </div>
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/35 shrink-0" />
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-text shrink-0" />
                             </div>
                           );
                         })}
@@ -915,7 +913,7 @@ export const DashboardV2: React.FC = () => {
                     {/* Documents category */}
                     {searchDocs.length > 0 && (
                       <div className="space-y-1">
-                        <p className="text-[9px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40 px-2">
+                        <p className="text-[9px] uppercase tracking-[0.1em] font-bold text-muted-text px-2">
                           Documents ({searchDocs.length})
                         </p>
                         {searchDocs.slice(0, 3).map((doc, index) => {
@@ -927,16 +925,16 @@ export const DashboardV2: React.FC = () => {
                               ref={isSelected ? selectedRef : undefined}
                               onClick={() => handleSearchResultClick("document", doc.id)}
                               className={`p-2 rounded-lg cursor-pointer flex justify-between items-center gap-4 transition-all text-xs font-semibold ${
-                                isSelected ? "bg-white/[0.03]" : "hover:bg-white/[0.015]"
+                                isSelected ? "bg-secondary" : "hover:bg-secondary/50"
                               }`}
                             >
                               <div className="truncate flex-grow">
                                 <span className="flex items-center gap-2 truncate">
-                                  <span className="text-muted-foreground/60">📄</span>
-                                  <h4 className="truncate text-foreground/85 font-medium">{doc.filename}</h4>
+                                  <span className="text-secondary-text">📄</span>
+                                  <h4 className="truncate text-primary-text font-semibold">{doc.filename}</h4>
                                 </span>
                               </div>
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/35 shrink-0" />
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-text shrink-0" />
                             </div>
                           );
                         })}
@@ -946,7 +944,7 @@ export const DashboardV2: React.FC = () => {
                     {/* Folders category */}
                     {searchFolders.length > 0 && (
                       <div className="space-y-1">
-                        <p className="text-[9px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40 px-2">
+                        <p className="text-[9px] uppercase tracking-[0.1em] font-bold text-muted-text px-2">
                           Folders ({searchFolders.length})
                         </p>
                         {searchFolders.slice(0, 3).map((folder, index) => {
@@ -958,16 +956,16 @@ export const DashboardV2: React.FC = () => {
                               ref={isSelected ? selectedRef : undefined}
                               onClick={() => handleSearchResultClick("folder", folder.id)}
                               className={`p-2 rounded-lg cursor-pointer flex justify-between items-center gap-4 transition-all text-xs font-semibold ${
-                                isSelected ? "bg-white/[0.03]" : "hover:bg-white/[0.015]"
+                                isSelected ? "bg-secondary" : "hover:bg-secondary/50"
                               }`}
                             >
                               <div className="truncate flex-grow">
                                 <span className="flex items-center gap-2 truncate">
-                                  <span className="text-muted-foreground/60">📁</span>
-                                  <h4 className="truncate text-foreground/85 font-medium">{folder.name}</h4>
+                                  <span className="text-secondary-text">📁</span>
+                                  <h4 className="truncate text-primary-text font-semibold">{folder.name}</h4>
                                 </span>
                               </div>
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/35 shrink-0" />
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-text shrink-0" />
                             </div>
                           );
                         })}
@@ -977,7 +975,7 @@ export const DashboardV2: React.FC = () => {
                     {/* Tags category */}
                     {searchTags.length > 0 && (
                       <div className="space-y-1">
-                        <p className="text-[9px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40 px-2">
+                        <p className="text-[9px] uppercase tracking-[0.1em] font-bold text-muted-text px-2">
                           Tags ({searchTags.length})
                         </p>
                         {searchTags.slice(0, 3).map((tag, index) => {
@@ -989,16 +987,16 @@ export const DashboardV2: React.FC = () => {
                               ref={isSelected ? selectedRef : undefined}
                               onClick={() => handleSearchResultClick("tag", tag.id)}
                               className={`p-2 rounded-lg cursor-pointer flex justify-between items-center gap-4 transition-all text-xs font-semibold ${
-                                isSelected ? "bg-white/[0.03]" : "hover:bg-white/[0.015]"
+                                isSelected ? "bg-secondary" : "hover:bg-secondary/50"
                               }`}
                             >
                               <div className="truncate flex-grow">
                                 <span className="flex items-center gap-2 truncate">
-                                  <span className="text-muted-foreground/60">🏷️</span>
-                                  <h4 className="truncate text-foreground/85 font-medium">{tag.name}</h4>
+                                  <span className="text-secondary-text">🏷️</span>
+                                  <h4 className="truncate text-primary-text font-semibold">{tag.name}</h4>
                                 </span>
                               </div>
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/35 shrink-0" />
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-text shrink-0" />
                             </div>
                           );
                         })}
@@ -1008,7 +1006,7 @@ export const DashboardV2: React.FC = () => {
                     {/* Chat Conversations category */}
                     {searchConversations.length > 0 && (
                       <div className="space-y-1">
-                        <p className="text-[9px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40 px-2">
+                        <p className="text-[9px] uppercase tracking-[0.1em] font-bold text-muted-text px-2">
                           Chats ({searchConversations.length})
                         </p>
                         {searchConversations.slice(0, 3).map((conv, index) => {
@@ -1020,16 +1018,16 @@ export const DashboardV2: React.FC = () => {
                               ref={isSelected ? selectedRef : undefined}
                               onClick={() => handleSearchResultClick("conversation", conv.id)}
                               className={`p-2 rounded-lg cursor-pointer flex justify-between items-center gap-4 transition-all text-xs font-semibold ${
-                                isSelected ? "bg-white/[0.03]" : "hover:bg-white/[0.015]"
+                                isSelected ? "bg-secondary" : "hover:bg-secondary/50"
                               }`}
                             >
                               <div className="truncate flex-grow">
                                 <span className="flex items-center gap-2 truncate">
-                                  <span className="text-muted-foreground/60">💬</span>
-                                  <h4 className="truncate text-foreground/85 font-medium">{conv.title}</h4>
+                                  <span className="text-secondary-text">💬</span>
+                                  <h4 className="truncate text-primary-text font-semibold">{conv.title}</h4>
                                 </span>
                               </div>
-                              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/35 shrink-0" />
+                              <ChevronRight className="h-3.5 w-3.5 text-muted-text shrink-0" />
                             </div>
                           );
                         })}
@@ -1040,7 +1038,7 @@ export const DashboardV2: React.FC = () => {
 
                 {/* 2. Commands list */}
                 <div className="space-y-1">
-                  <p className="text-[9px] uppercase tracking-[0.1em] font-semibold text-muted-foreground/40 px-2">
+                  <p className="text-[9px] uppercase tracking-[0.1em] font-bold text-muted-text px-2">
                     Quick Commands
                   </p>
                   {quickCommands.map((cmd, index) => {

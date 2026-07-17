@@ -92,7 +92,7 @@ export const TagsPage: React.FC = () => {
       {/* Grid */}
       {tags?.length === 0 ? (
         <div className="border border-dashed border-border rounded-2xl p-16 text-center text-xs text-muted-foreground flex flex-col items-center gap-3">
-          <TagIcon className="h-10 w-10 text-muted-foreground/60" />
+          <TagIcon className="h-10 w-10 text-muted-text" />
           <p>No tags created yet. Create a tag to color-code your topics!</p>
           <button
             onClick={() => setShowModal(true)}
@@ -107,7 +107,7 @@ export const TagsPage: React.FC = () => {
             <div
               key={tag.id}
               onClick={() => setActiveTagId(tag.id)}
-              className="glass-panel rounded-2xl p-4 border border-border/80 hover:border-primary/50 cursor-pointer flex items-center justify-between transition-all bg-card group"
+              className="glass-panel rounded-2xl p-4 border border-border hover:border-primary/50 cursor-pointer flex items-center justify-between transition-all bg-card group"
             >
               <div className="flex items-center gap-2.5 truncate w-[80%]">
                 <span

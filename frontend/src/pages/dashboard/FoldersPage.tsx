@@ -106,7 +106,7 @@ export const FoldersPage: React.FC = () => {
                   </span>
                   <button
                     onClick={(e) => handleDeleteFolder(folder.id, e)}
-                    className="text-muted-foreground/80 hover:text-red-500 rounded p-1 hover:bg-muted/50 transition-all"
+                    className="text-secondary-text hover:text-red-500 rounded p-1 hover:bg-muted/50 transition-all"
                     title="Delete folder"
                   >
                     <Trash2 className="h-4 w-4 shrink-0" />
@@ -121,15 +121,15 @@ export const FoldersPage: React.FC = () => {
                       {folder.description}
                     </p>
                   ) : (
-                    <p className="text-xs text-muted-foreground/50 italic mt-0.5">
+                    <p className="text-xs text-muted-text italic mt-0.5">
                       No description
                     </p>
                   )}
                 </div>
               </div>
 
-              <div className="flex justify-between items-center border-t border-border/40 pt-3 mt-3">
-                <span className="text-[10px] text-muted-foreground/80">
+              <div className="flex justify-between items-center border-t border-border pt-3 mt-3">
+                <span className="text-[10px] text-secondary-text">
                   {new Date(folder.created_at).toLocaleDateString(undefined, {
                     year: "numeric",
                     month: "short",
