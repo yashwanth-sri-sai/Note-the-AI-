@@ -19,7 +19,12 @@ export const useKnowledgeSources = (
       const response = await apiClient.get("/knowledge/sources", {
         params: { include_processing: includeProcessing },
       });
-      return response.data;
+      const raw = response.data;
+      if (!Array.isArray(raw)) {
+        console.error("[useKnowledgeSources] Expected Array, got:", typeof raw, raw);
+        return [];
+      }
+      return raw as KnowledgeSource[];
     },
 
     // ── Polling: active only while a document is still being ingested ─────────

@@ -25,10 +25,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
       set({ isLoading: true });
       try {
         const response = await apiClient.get("/workspaces/");
-        const workspaces = response.data;
-        
+        const raw = response.data;
+
+        // Guard: the backend ALWAYS returns a plain array for GET /workspaces/.
+        // If this assertion fails it means CORS is blocking the response, the
+        // backend returned an error object, or the API contract changed.
+        if (!Array.isArray(raw)) {
+          console.error(
+            "[workspace-store] fetchWorkspaces: expected Array, got:",
+            typeof raw,
+            raw
+          );
+          set({ workspaces: [], isLoading: false });
+          return;
+        }
+        const workspaces: Workspace[] = raw;
+
         let activeId = get().activeWorkspaceId;
-        
+
         // If the active workspace is not in the fetched list (or is null), fallback to the first workspace
         if (workspaces.length > 0) {
           const match = workspaces.find((w: Workspace) => w.id === activeId);
@@ -47,6 +61,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
           isLoading: false,
         });
       } catch (error) {
+        console.error("[workspace-store] fetchWorkspaces error:", error);
         set({ isLoading: false });
         throw error;
       }

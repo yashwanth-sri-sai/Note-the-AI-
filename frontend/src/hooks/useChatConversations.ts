@@ -59,7 +59,12 @@ export const useChatConversations = () => {
     queryFn: async () => {
       console.trace("[FORENSIC Trace] chat query executed (GET /chat/conversations)");
       const response = await apiClient.get("/chat/conversations");
-      return response.data;
+      const raw = response.data;
+      if (!Array.isArray(raw)) {
+        console.error("[useChatConversations] Expected Array, got:", typeof raw, raw);
+        return [];
+      }
+      return raw as ConversationItem[];
     },
 
     // ── Cache tunables ───────────────────────────────────────────────────────

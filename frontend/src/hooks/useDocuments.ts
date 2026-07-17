@@ -26,7 +26,12 @@ export const useDocuments = () => {
     queryKey: ["documents", activeWorkspaceId],
     queryFn: async () => {
       const response = await apiClient.get("/documents/");
-      return response.data;
+      const raw = response.data;
+      if (!Array.isArray(raw)) {
+        console.error("[useDocuments] Expected Array, got:", typeof raw, raw);
+        return [];
+      }
+      return raw as DocumentItem[];
     },
 
     // ── Polling: ONLY while at least one document is still processing ────────
