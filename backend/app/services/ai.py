@@ -145,7 +145,7 @@ class AIService:
                 select(DocumentChunk.chunk_text, DocumentChunk.chunk_index, Document.filename)
                 .join(Document, DocumentChunk.document_id == Document.id)
                 .where(Document.id == note_id)
-                .where(Document.status == "completed")
+                .where(Document.status.in_(["completed", "READY"]))
                 .order_by(DocumentChunk.chunk_index)
             )
             res_chunks = await self.db.execute(stmt_chunks)

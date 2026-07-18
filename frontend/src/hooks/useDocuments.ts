@@ -8,7 +8,7 @@ export interface DocumentItem {
   filename: string;
   file_size: number;
   content_type: string;
-  status: "pending" | "processing" | "completed" | "failed" | "UPLOADED" | "TEXT_EXTRACTED" | "CHUNKED" | "EMBEDDED" | "FLASHCARDS_READY" | "QUIZZES_READY" | "COMPLETED" | "FAILED";
+  status: string;
   created_at: string;
 }
 
@@ -50,25 +50,14 @@ export const useDocuments = () => {
         
         // Skip terminal/stopped states
         if (
+          s === "READY" ||
           s === "COMPLETED" || 
-          s === "FAILED" || 
-          s === "QUIZZES_READY" ||
-          doc.status === "completed" ||
-          doc.status === "failed"
+          s === "FAILED"
         ) {
           continue;
         }
 
-        let interval = 3000; // default fallback for active states
-        if (s === "UPLOADED" || doc.status === "pending" || doc.status === "processing") {
-          interval = 1000;
-        } else if (s === "TEXT_EXTRACTED" || s === "CHUNKED") {
-          interval = 2000;
-        } else if (s === "EMBEDDED") {
-          interval = 3000;
-        } else if (s === "FLASHCARDS_READY") {
-          interval = 5000;
-        }
+        let interval = 2500; // standard active polling interval
 
         if (minInterval === null || interval < minInterval) {
           minInterval = interval;
@@ -134,6 +123,22 @@ export const useDeleteDocument = () => {
   return useMutation({
     mutationFn: async (id: string) => {
       const response = await apiClient.delete(`/documents/${id}`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["documents", activeWorkspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["knowledgeSources"], exact: false });
+    },
+  });
+};
+
+export const useRetryDocument = () => {
+  const queryClient = useQueryClient();
+  const { activeWorkspaceId } = useWorkspaceStore();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiClient.post(`/documents/${id}/retry`);
       return response.data;
     },
     onSuccess: () => {

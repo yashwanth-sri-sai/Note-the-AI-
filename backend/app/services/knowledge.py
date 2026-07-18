@@ -42,7 +42,7 @@ class KnowledgeService:
         # 1. Fetch all documents in this workspace
         doc_stmt = select(Document).where(Document.workspace_id == workspace_id)
         if not include_processing:
-            doc_stmt = doc_stmt.where(func.lower(Document.status) == "completed")
+            doc_stmt = doc_stmt.where(func.lower(Document.status).in_(["completed", "ready"]))
         doc_res = await self.db.execute(doc_stmt)
         documents = doc_res.scalars().all()
 
@@ -142,7 +142,7 @@ class KnowledgeService:
             .join(Document, DocumentChunk.document_id == Document.id)
             .where(Document.id == doc_id)
             .where(Document.workspace_id == workspace_id)
-            .where(func.lower(Document.status) == "completed")
+            .where(func.lower(Document.status).in_(["completed", "ready"]))
             .order_by(DocumentChunk.chunk_index)
             .limit(limit)
         )

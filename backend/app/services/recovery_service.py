@@ -25,7 +25,7 @@ async def stuck_job_recovery_task() -> None:
         try:
             # Select all jobs that are not in a terminal state
             stmt = select(ProcessingJob).where(
-                ~ProcessingJob.status.in_(["COMPLETED", "completed", "FAILED", "failed"])
+                ~ProcessingJob.status.in_(["COMPLETED", "completed", "FAILED", "failed", "READY", "ready"])
             )
             result = await db.execute(stmt)
             unfinished_jobs = result.scalars().all()

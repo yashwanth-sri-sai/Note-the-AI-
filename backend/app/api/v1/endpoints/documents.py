@@ -67,12 +67,13 @@ async def run_document_ingestion_pipeline(
                 job.status = status_str
                 if error_msg:
                     job.error_message = error_msg
-                if status_str == "UPLOADED":
+                if status_str == "UPLOADING":
                     job.processing_started_at = datetime.utcnow()
-                elif status_str in ["COMPLETED", "FAILED"]:
+                elif status_str in ["READY", "FAILED", "COMPLETED"]:
                     job.processing_completed_at = datetime.utcnow()
             if doc:
-                doc.status = status_str
+                if status_str not in ["SUMMARY_GENERATION", "FLASHCARD_GENERATION", "QUIZ_GENERATION"]:
+                    doc.status = status_str
             await db.commit()
 
             # Record document processing status in Prometheus metrics
@@ -85,13 +86,13 @@ async def run_document_ingestion_pipeline(
             async with db_session_factory() as db:
                 await _update(db)
 
-    # 1. Initialize UPLOADED state
-    logger.info(f"[PIPELINE] PIPELINE_STARTED — doc={document_id}, job={job_id}")
+    # 1. Initialize UPLOADING state
+    logger.info(f"[PIPELINE] UPLOAD_STARTED — doc={document_id}")
     try:
-        await update_status("UPLOADED")
-        logger.info(f"[PIPELINE] UPLOAD_COMPLETE — doc={document_id}")
+        await update_status("UPLOADING")
+        logger.info(f"[PIPELINE] UPLOAD_FINISHED — doc={document_id}")
     except Exception as e:
-        logger.error(f"[PIPELINE] Failed to initialize UPLOADED status: {e}")
+        logger.error(f"[PIPELINE] Failed to initialize UPLOADING status: {e}")
 
     # Load file bytes from storage if they were not passed (e.g. during startup recovery)
     _workspace_id = workspace_id
@@ -125,190 +126,224 @@ async def run_document_ingestion_pipeline(
     flat_chunks = []
     embedding_latency_ms = 0.0
     pipeline_start = _time.perf_counter()
+    pipeline_completed = False
 
-    for attempt in range(max_retries + 1):
-        try:
-            async with db_session_factory() as db:
-                # Update job's retry count in db
-                job = await db.get(ProcessingJob, job_id)
-                if job:
-                    job.retry_count = attempt
-                    await db.commit()
-
-                # Step A: Text Extraction
-                logger.info(f"[PIPELINE] TEXT_EXTRACTION_STARTED — attempt={attempt}, doc={document_id}")
-                _t_extract = _time.perf_counter()
-                await update_status("TEXT_EXTRACTED", session=db)
-
-                extractor = get_extractor(filename, content_type)
-                extracted_data = extractor.extract_unified(file_bytes)
-                unified_text = extracted_data["text"]
-                page_map = extracted_data["page_map"]
-
-                if not unified_text.strip():
-                    raise ValueError("No readable text content extracted from document.")
-
-                logger.info(
-                    f"[PIPELINE] TEXT_EXTRACTION_FINISHED — "
-                    f"chars={len(unified_text)}, pages={len(page_map)}, "
-                    f"elapsed={(_time.perf_counter()-_t_extract)*1000:.1f}ms"
-                )
-                
-                # Step B: Chunking
-                logger.info(f"[PIPELINE] CHUNKING_STARTED — doc={document_id}")
-                _t_chunk = _time.perf_counter()
-                await update_status("CHUNKED", session=db)
-                
-                chunking_service = get_chunking_service()
-                sub_chunks = chunking_service.split_text_with_offsets(unified_text)
-                
-                flat_chunks = []
-                chunk_idx = 0
-                for sc in sub_chunks:
-                    mapped_page = 1
-                    mapped_section = None
-                    for p in page_map:
-                        if p["start_offset"] <= sc["start_offset"] < p["end_offset"]:
-                            mapped_page = p["page_number"]
-                            mapped_section = p["section_title"]
-                            break
-                    if not mapped_section and page_map and sc["start_offset"] >= page_map[-1]["end_offset"]:
-                        mapped_page = page_map[-1]["page_number"]
-                        mapped_section = page_map[-1]["section_title"]
-                    
-                    tokens = TokenService.estimate_tokens(sc["text"])
-                    source_ref = f"{filename}#page={mapped_page}" if mapped_page else filename
-                    
-                    flat_chunks.append({
-                        "text": sc["text"],
-                        "chunk_index": chunk_idx,
-                        "page_number": mapped_page,
-                        "section_title": mapped_section,
-                        "start_offset": sc["start_offset"],
-                        "end_offset": sc["end_offset"],
-                        "token_count": tokens,
-                        "source_reference": source_ref
-                    })
-                    chunk_idx += 1
-
-                extracted_text = "\n\n".join([c["text"] for c in flat_chunks])
-                logger.info(
-                    f"[PIPELINE] CHUNKING_FINISHED — "
-                    f"chunks={len(flat_chunks)}, "
-                    f"elapsed={(_time.perf_counter()-_t_chunk)*1000:.1f}ms"
-                )
-
-                # Step C: Embedding
-                logger.info(f"[PIPELINE] EMBEDDINGS_STARTED — doc={document_id}, chunks={len(flat_chunks)}")
-                _t_embed = _time.perf_counter()
-                await update_status("EMBEDDED", session=db)
-
-                # Check if chunks already exist (Idempotency)
-                stmt = select(DocumentChunk).where(DocumentChunk.document_id == document_id)
-                res = await db.execute(stmt)
-                existing_chunks = res.scalars().all()
-
-                if not existing_chunks:
-                    # Chunks don't exist, generate and save them
-                    logger.info(f"[PIPELINE] Generating batch embeddings for {len(flat_chunks)} chunks...")
-                    embedding_provider = get_embedding_provider()
-                    texts_to_embed = [c["text"] for c in flat_chunks]
-                    embedding_start = _time.perf_counter()
-                    vectors = await embedding_provider.get_embeddings(texts_to_embed)
-                    embedding_latency_ms = (_time.perf_counter() - embedding_start) * 1000.0
-                    logger.info(
-                        f"[PIPELINE] EMBEDDINGS_FINISHED — "
-                        f"vectors={len(vectors)}, elapsed={embedding_latency_ms:.1f}ms"
-                    )
-
-                    logger.info(f"[PIPELINE] VECTOR_INSERT_STARTED — chunks={len(flat_chunks)}")
-                    for chunk_data, vector in zip(flat_chunks, vectors):
-                        chunk = DocumentChunk(
-                            document_id=document_id,
-                            chunk_index=chunk_data["chunk_index"],
-                            chunk_text=chunk_data["text"],
-                            page_number=chunk_data["page_number"],
-                            section_title=chunk_data["section_title"],
-                            start_offset=chunk_data["start_offset"],
-                            end_offset=chunk_data["end_offset"],
-                            token_count=chunk_data["token_count"],
-                            source_reference=chunk_data["source_reference"]
-                        )
-                        db.add(chunk)
-                        await db.flush()  # Generate chunk.id
-
-                        embedding_record = Embedding(
-                            chunk_id=chunk.id,
-                            embedding=vector,
-                            provider=getattr(embedding_provider, "__class__").__name__,
-                            model_name=getattr(embedding_provider, "model", "LocalTrigram")
-                        )
-                        db.add(embedding_record)
-                    await db.commit()
-                    logger.info(
-                        f"[PIPELINE] VECTOR_INSERT_COMPLETE — "
-                        f"chunks={len(flat_chunks)}, "
-                        f"total_embed_elapsed={(_time.perf_counter()-_t_embed)*1000:.1f}ms"
-                    )
-                else:
-                    logger.info("[PIPELINE] Chunks and embeddings already exist. Skipping creation.")
-
-            break # Success, break attempt loop!
-            
-        except Exception as e:
-            logger.error(
-                f"[PIPELINE] PIPELINE_STAGE_FAILED — attempt={attempt}, doc={document_id}, "
-                f"error_type={type(e).__name__}, error={str(e)}"
-            )
-            logger.error(traceback.format_exc())
-
-            # Determine if validation/unrecoverable error
-            is_val = isinstance(e, (ValueError, TypeError, AttributeError)) or "MIME" in str(e)
-            if is_val or attempt == max_retries:
-                # Mark as FAILED — never leave permanently PROCESSING
-                await update_status("FAILED", error_msg=str(e))
-                logger.error(
-                    f"[PIPELINE] DOCUMENT_FAILED — doc={document_id}, "
-                    f"reason={str(e)[:200]}"
-                )
-                # Update Note content to indicate failure
+    try:
+        for attempt in range(max_retries + 1):
+            try:
                 async with db_session_factory() as db:
-                    note = await db.get(Note, document_id)
-                    if note:
-                        note.content = f"Failed to process document: {str(e)}"
-                        db.add(note)
+                    # Update job's retry count in db
+                    job = await db.get(ProcessingJob, job_id)
+                    if job:
+                        job.retry_count = attempt
                         await db.commit()
-                return  # Abort ingestion pipeline
 
-            # Wait with exponential backoff
-            logger.info(f"Retrying in {retry_delay} seconds...")
-            await asyncio.sleep(retry_delay)
-            retry_delay *= 2.0
+                    # Step A: Text Extraction
+                    logger.info(f"[PIPELINE] TEXT_EXTRACTION_STARTED — attempt={attempt}, doc={document_id}")
+                    _t_extract = _time.perf_counter()
+                    await update_status("EXTRACTING", session=db)
 
-    # Retrieve workspace/user params from Document if needed
-    _workspace_id = workspace_id
-    _user_id = user_id
-    if not _workspace_id or not _user_id:
-        async with db_session_factory() as db:
-            doc = await db.get(Document, document_id)
-            if doc:
-                _workspace_id = _workspace_id or doc.workspace_id
-                _user_id = _user_id or doc.created_by
+                    extractor = get_extractor(filename, content_type)
+                    extracted_data = extractor.extract_unified(file_bytes)
+                    unified_text = extracted_data["text"]
+                    page_map = extracted_data["page_map"]
 
-    # Update corresponding Note content with the extracted text
-    if extracted_text:
+                    if not unified_text.strip():
+                        raise ValueError("No readable text content extracted from document.")
+
+                    logger.info(
+                        f"[PIPELINE] TEXT_EXTRACTION_FINISHED — "
+                        f"chars={len(unified_text)}, pages={len(page_map)}, "
+                        f"elapsed={(_time.perf_counter()-_t_extract)*1000:.1f}ms"
+                    )
+                    
+                    # Step B: Chunking
+                    logger.info(f"[PIPELINE] CHUNKING_STARTED — doc={document_id}")
+                    _t_chunk = _time.perf_counter()
+                    await update_status("CHUNKING", session=db)
+                    
+                    chunking_service = get_chunking_service()
+                    sub_chunks = chunking_service.split_text_with_offsets(unified_text)
+                    
+                    flat_chunks = []
+                    chunk_idx = 0
+                    for sc in sub_chunks:
+                        mapped_page = 1
+                        mapped_section = None
+                        for p in page_map:
+                            if p["start_offset"] <= sc["start_offset"] < p["end_offset"]:
+                                mapped_page = p["page_number"]
+                                mapped_section = p["section_title"]
+                                break
+                        if not mapped_section and page_map and sc["start_offset"] >= page_map[-1]["end_offset"]:
+                            mapped_page = page_map[-1]["page_number"]
+                            mapped_section = page_map[-1]["section_title"]
+                        
+                        tokens = TokenService.estimate_tokens(sc["text"])
+                        source_ref = f"{filename}#page={mapped_page}" if mapped_page else filename
+                        
+                        flat_chunks.append({
+                            "text": sc["text"],
+                            "chunk_index": chunk_idx,
+                            "page_number": mapped_page,
+                            "section_title": mapped_section,
+                            "start_offset": sc["start_offset"],
+                            "end_offset": sc["end_offset"],
+                            "token_count": tokens,
+                            "source_reference": source_ref
+                        })
+                        chunk_idx += 1
+
+                    extracted_text = "\n\n".join([c["text"] for c in flat_chunks])
+                    logger.info(
+                        f"[PIPELINE] CHUNKING_FINISHED — "
+                        f"chunks={len(flat_chunks)}, "
+                        f"elapsed={(_time.perf_counter()-_t_chunk)*1000:.1f}ms"
+                    )
+
+                    # Step C: Embedding
+                    logger.info(f"[PIPELINE] EMBEDDINGS_STARTED — doc={document_id}, chunks={len(flat_chunks)}")
+                    _t_embed = _time.perf_counter()
+                    await update_status("EMBEDDING", session=db)
+
+                    # Check if chunks already exist (Idempotency)
+                    stmt = select(DocumentChunk).where(DocumentChunk.document_id == document_id)
+                    res = await db.execute(stmt)
+                    existing_chunks = res.scalars().all()
+
+                    if not existing_chunks:
+                        # Chunks don't exist, generate and save them
+                        logger.info(f"[PIPELINE] Generating batch embeddings for {len(flat_chunks)} chunks...")
+                        embedding_provider = get_embedding_provider()
+                        texts_to_embed = [c["text"] for c in flat_chunks]
+                        embedding_start = _time.perf_counter()
+                        vectors = await embedding_provider.get_embeddings(texts_to_embed)
+                        embedding_latency_ms = (_time.perf_counter() - embedding_start) * 1000.0
+                        logger.info(
+                            f"[PIPELINE] EMBEDDINGS_FINISHED — "
+                            f"vectors={len(vectors)}, elapsed={embedding_latency_ms:.1f}ms"
+                        )
+
+                        # Step C.5: Indexing
+                        logger.info(f"[PIPELINE] INDEXING_STARTED — chunks={len(flat_chunks)}")
+                        await update_status("INDEXING", session=db)
+                        for chunk_data, vector in zip(flat_chunks, vectors):
+                            chunk = DocumentChunk(
+                                document_id=document_id,
+                                chunk_index=chunk_data["chunk_index"],
+                                chunk_text=chunk_data["text"],
+                                page_number=chunk_data["page_number"],
+                                section_title=chunk_data["section_title"],
+                                start_offset=chunk_data["start_offset"],
+                                end_offset=chunk_data["end_offset"],
+                                token_count=chunk_data["token_count"],
+                                source_reference=chunk_data["source_reference"]
+                            )
+                            db.add(chunk)
+                            await db.flush()  # Generate chunk.id
+
+                            embedding_record = Embedding(
+                                chunk_id=chunk.id,
+                                embedding=vector,
+                                provider=getattr(embedding_provider, "__class__").__name__,
+                                model_name=getattr(embedding_provider, "model", "LocalTrigram")
+                            )
+                            db.add(embedding_record)
+                        await db.commit()
+                        logger.info(
+                            f"[PIPELINE] INDEXING_FINISHED — "
+                            f"chunks={len(flat_chunks)}, "
+                            f"total_embed_elapsed={(_time.perf_counter()-_t_embed)*1000:.1f}ms"
+                        )
+                    else:
+                        logger.info("[PIPELINE] Chunks and embeddings already exist. Skipping creation.")
+
+                break # Success, break attempt loop!
+                
+            except Exception as e:
+                logger.error(
+                    f"[PIPELINE] PIPELINE_STAGE_FAILED — attempt={attempt}, doc={document_id}, "
+                    f"error_type={type(e).__name__}, error={str(e)}"
+                )
+                logger.error(traceback.format_exc())
+
+                # Determine if validation/unrecoverable error
+                is_val = isinstance(e, (ValueError, TypeError, AttributeError)) or "MIME" in str(e)
+                if is_val or attempt == max_retries:
+                    raise e
+
+                # Wait with exponential backoff
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2.0
+
+        # Retrieve workspace/user params from Document if needed
+        _workspace_id = workspace_id
+        _user_id = user_id
+        if not _workspace_id or not _user_id:
+            async with db_session_factory() as db:
+                doc = await db.get(Document, document_id)
+                if doc:
+                    _workspace_id = _workspace_id or doc.workspace_id
+                    _user_id = _user_id or doc.created_by
+
+        # Update corresponding Note content with the extracted text
+        if extracted_text:
+            async with db_session_factory() as db:
+                note = await db.get(Note, document_id)
+                if note:
+                    note.content = extracted_text
+                    db.add(note)
+                    await db.commit()
+
+        # Update Document and Job Status to READY (Non-blocking for optional AI tasks)
+        await update_status("READY")
+        document_processing_ms = (_time.perf_counter() - pipeline_start) * 1000.0
+        asyncio.create_task(log_latency_metric(
+            workspace_id=_workspace_id,
+            user_id=_user_id,
+            embedding_latency_ms=embedding_latency_ms,
+            document_processing_ms=document_processing_ms,
+        ))
+        logger.info(
+            f"[PIPELINE] DOCUMENT_COMPLETED — doc={document_id}, "
+            f"total_elapsed={document_processing_ms:.1f}ms, "
+            f"embed_ms={embedding_latency_ms:.1f}ms"
+        )
+        pipeline_completed = True
+
+    except Exception as e:
+        # Guarantee FAILED state
+        logger.error(
+            f"[PIPELINE] DOCUMENT_FAILED — doc={document_id}, "
+            f"reason={str(e)[:200]}"
+        )
+        await update_status("FAILED", error_msg=str(e))
+        # Update Note content to indicate failure
         async with db_session_factory() as db:
             note = await db.get(Note, document_id)
             if note:
-                note.content = extracted_text
+                note.content = f"Failed to process document: {str(e)}"
                 db.add(note)
                 await db.commit()
+        return  # Abort ingestion pipeline
+
+    # ── Optional AI Tasks (Non-blocking) ──────────────────────────────────────────
+
+    # Step D.5: Summary Generation (Optional, resilient)
+    try:
+        logger.info(f"[PIPELINE] SUMMARY_GENERATION_STARTED — doc={document_id}")
+        await update_status("SUMMARY_GENERATION")
+        # Placeholder for summary generation logic since there's no DB model for it, but log start and finish
+        logger.info(f"[PIPELINE] SUMMARY_GENERATION_FINISHED — doc={document_id}")
+    except Exception as e:
+        logger.error(f"[PIPELINE] SUMMARY_GENERATION_FAILED — doc={document_id}: {e}")
 
     # Step D: Flashcard Generation (Resilient, try-except, idempotent)
     try:
         logger.info(f"[PIPELINE] FLASHCARDS_STARTED — doc={document_id}")
         _t_fc = _time.perf_counter()
-        await update_status("FLASHCARDS_READY")
+        await update_status("FLASHCARD_GENERATION")
         async with db_session_factory() as db:
             # Check if flashcards already exist (Idempotency)
             fc_stmt = select(Flashcard).where(Flashcard.note_id == document_id)
@@ -326,7 +361,6 @@ async def run_document_ingestion_pipeline(
     except Exception as e:
         logger.error(f"[PIPELINE] FLASHCARDS_FAILED — doc={document_id}: {e}")
         logger.error(traceback.format_exc())
-        # Update last_error, but continue
         async with db_session_factory() as db:
             job = await db.get(ProcessingJob, job_id)
             if job:
@@ -337,7 +371,7 @@ async def run_document_ingestion_pipeline(
     try:
         logger.info(f"[PIPELINE] QUIZZES_STARTED — doc={document_id}")
         _t_qz = _time.perf_counter()
-        await update_status("QUIZZES_READY")
+        await update_status("QUIZ_GENERATION")
         async with db_session_factory() as db:
             # Check if quizzes already exist (Idempotency)
             qz_stmt = select(Quiz).where(Quiz.note_id == document_id)
@@ -355,31 +389,17 @@ async def run_document_ingestion_pipeline(
     except Exception as e:
         logger.error(f"[PIPELINE] QUIZZES_FAILED — doc={document_id}: {e}")
         logger.error(traceback.format_exc())
-        # Update last_error, but continue
         async with db_session_factory() as db:
             job = await db.get(ProcessingJob, job_id)
             if job:
                 job.error_message = f"Quiz Gen Error: {str(e)}"
                 await db.commit()
 
-    # Step F: Completed status
+    # Finally set the job status back to READY (to indicate that optional tasks have completed)
     try:
-        await update_status("COMPLETED")
-        document_processing_ms = (_time.perf_counter() - pipeline_start) * 1000.0
-        asyncio.create_task(log_latency_metric(
-            workspace_id=_workspace_id,
-            user_id=_user_id,
-            embedding_latency_ms=embedding_latency_ms,
-            document_processing_ms=document_processing_ms,
-        ))
-        logger.info(
-            f"[PIPELINE] DOCUMENT_COMPLETED — doc={document_id}, "
-            f"total_elapsed={document_processing_ms:.1f}ms, "
-            f"embed_ms={embedding_latency_ms:.1f}ms"
-        )
+        await update_status("READY")
     except Exception as e:
-        logger.error(f"[PIPELINE] Failed to finalize COMPLETED status: {e}")
-        logger.error(traceback.format_exc())
+        logger.error(f"[PIPELINE] Failed to finalize status to READY: {e}")
 
 
 
@@ -431,13 +451,13 @@ async def run_document_reindex_pipeline(
                     )
                     db.add(new_emb)
                     
-            doc.status = "completed"
+            doc.status = "READY"
             await db.commit()
         except Exception as e:
             await db.rollback()
             doc = await db.get(Document, document_id)
             if doc:
-                doc.status = "failed"
+                doc.status = "FAILED"
                 await db.commit()
 
 
@@ -522,7 +542,7 @@ async def upload_document(
             file_size=file_size,
             content_type=file.content_type or "application/octet-stream",
             storage_path=storage_path,
-            status="UPLOADED",
+            status="UPLOADING",
             created_by=current_user.id
         )
         db.add(doc)
@@ -542,7 +562,7 @@ async def upload_document(
         # 4. Create ProcessingJob entry
         job = ProcessingJob(
             document_id=doc.id,
-            status="UPLOADED"
+            status="UPLOADING"
         )
         db.add(job)
         await db.flush()
@@ -767,5 +787,58 @@ async def reindex_document(
     )
     
     return doc
+
+
+@router.post("/{document_id}/retry", response_model=DocumentResponse)
+async def retry_document(
+    document_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    workspace_id: uuid.UUID = Depends(get_current_workspace_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Re-enqueue a failed document to run through the ingestion pipeline from scratch using stored file bytes."""
+    stmt = select(Document).where(Document.id == document_id, Document.workspace_id == workspace_id)
+    result = await db.execute(stmt)
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise NotFoundException(detail="Document not found")
+        
+    doc.status = "UPLOADING"
+    await db.commit()
+    
+    # Check if a processing job already exists for this document, or create a new one
+    job_stmt = select(ProcessingJob).where(ProcessingJob.document_id == document_id)
+    job_res = await db.execute(job_stmt)
+    job = job_res.scalar_one_or_none()
+    if not job:
+        job = ProcessingJob(document_id=document_id, status="UPLOADING")
+        db.add(job)
+        await db.flush()
+    else:
+        job.status = "UPLOADING"
+        job.error_message = None
+        job.retry_count = 0
+    await db.commit()
+    
+    from app.db.session import async_session_factory
+    from app.core.logging_conf import correlation_id_ctx
+    corr_id = correlation_id_ctx.get()
+    
+    background_tasks.add_task(
+        run_document_ingestion_pipeline,
+        document_id,
+        job.id,
+        None,  # Pass None to load from storage
+        doc.filename,
+        doc.content_type,
+        async_session_factory,
+        workspace_id,
+        current_user.id,
+        corr_id,
+    )
+    
+    return doc
+
 
 

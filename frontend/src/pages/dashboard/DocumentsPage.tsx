@@ -6,12 +6,13 @@ import {
 import { Loader } from "../../components/ui/Loader";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUIStore } from "@/store/ui-store";
-import { useDocuments, useUploadDocument, useDeleteDocument, DocumentItem } from "@/hooks/useDocuments";
+import { useDocuments, useUploadDocument, useDeleteDocument, useRetryDocument, DocumentItem } from "@/hooks/useDocuments";
 
 export const DocumentsPage: React.FC = () => {
   const { data: documents = [], isLoading, refetch } = useDocuments();
   const { mutateAsync: uploadDoc } = useUploadDocument();
   const { mutateAsync: deleteDoc } = useDeleteDocument();
+  const { mutateAsync: retryDoc } = useRetryDocument();
 
   const [isDragging, setIsDragging] = useState(false);
   const [activeDocPreview, setActiveDocPreview] = useState<DocumentItem | null>(null);
@@ -41,14 +42,16 @@ export const DocumentsPage: React.FC = () => {
         const s = activeDoc.status.toUpperCase();
         
         let message = current.message;
-        if (s === "UPLOADED") message = "Uploaded";
-        else if (s === "TEXT_EXTRACTED") message = "Extracting text...";
-        else if (s === "CHUNKED") message = "Chunking...";
-        else if (s === "EMBEDDED") message = "Creating embeddings...";
-        else if (s === "FLASHCARDS_READY") message = "Generating AI flashcards...";
-        else if (s === "QUIZZES_READY") message = "Generating AI quizzes...";
+        if (s === "UPLOADING") message = "Uploading...";
+        else if (s === "EXTRACTING" || s === "TEXT_EXTRACTED") message = "Extracting text...";
+        else if (s === "CHUNKING" || s === "CHUNKED") message = "Chunking...";
+        else if (s === "EMBEDDING" || s === "EMBEDDED") message = "Creating embeddings...";
+        else if (s === "INDEXING") message = "Indexing vectors...";
+        else if (s === "SUMMARY_GENERATION") message = "Generating AI summary...";
+        else if (s === "FLASHCARD_GENERATION" || s === "FLASHCARDS_READY") message = "Generating AI flashcards...";
+        else if (s === "QUIZ_GENERATION" || s === "QUIZZES_READY") message = "Generating AI quizzes...";
 
-        if (s === "COMPLETED") {
+        if (s === "READY" || s === "COMPLETED") {
           setUploadStatus({ status: "completed", message: "Document processed successfully!" });
           setTimeout(() => setUploadStatus({ status: "idle" }), 3000);
         } else if (s === "FAILED") {
@@ -74,39 +77,41 @@ export const DocumentsPage: React.FC = () => {
 
     if (s === "FAILED") return "failed";
 
-    const stages = [
-      "UPLOADED",
-      "TEXT_EXTRACTED",
-      "CHUNKED",
-      "EMBEDDED",
-      "FLASHCARDS_READY",
-      "QUIZZES_READY",
-      "COMPLETED"
+    const stepTargetStatuses: Record<string, string[]> = {
+      upload: ["UPLOADING", "UPLOADED"],
+      extract: ["EXTRACTING", "TEXT_EXTRACTED"],
+      chunk: ["CHUNKING", "CHUNKED"],
+      embed: ["EMBEDDING", "EMBEDDED", "INDEXING"],
+      flashcards: ["SUMMARY_GENERATION", "FLASHCARD_GENERATION", "FLASHCARDS_READY"],
+      quizzes: ["QUIZ_GENERATION", "QUIZZES_READY"],
+      ready: ["READY", "COMPLETED"]
+    };
+
+    const keys: Array<"upload" | "extract" | "chunk" | "embed" | "flashcards" | "quizzes" | "ready"> = [
+      "upload", "extract", "chunk", "embed", "flashcards", "quizzes", "ready"
     ];
+    
+    let activeIndex = -1;
+    for (let i = 0; i < keys.length; i++) {
+      const stepKeys = stepTargetStatuses[keys[i]];
+      if (stepKeys.includes(s)) {
+        activeIndex = i;
+        break;
+      }
+    }
 
-    const stepIndex = {
-      upload: 0,
-      extract: 1,
-      chunk: 2,
-      embed: 3,
-      flashcards: 4,
-      quizzes: 5,
-      ready: 6
-    }[stepName];
-
-    const currentStageIndex = stages.indexOf(s);
-
-    if (currentStageIndex === -1) {
+    const currentStepIndex = keys.indexOf(stepName);
+    
+    if (activeIndex === -1) {
       if (s === "PROCESSING" || s === "PENDING") {
         if (stepName === "upload") return "completed";
         if (stepName === "extract") return "active";
-        return "pending";
       }
       return "pending";
     }
 
-    if (currentStageIndex > stepIndex) return "completed";
-    if (currentStageIndex === stepIndex) return "active";
+    if (currentStepIndex < activeIndex) return "completed";
+    if (currentStepIndex === activeIndex) return "active";
     return "pending";
   };
 
@@ -216,6 +221,21 @@ export const DocumentsPage: React.FC = () => {
     }
   };
 
+  const handleRetry = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await retryDoc(id);
+      setUploadStatus({
+        status: "processing",
+        message: "Retrying document ingestion...",
+        progressFilename: documents.find(d => d.id === id)?.filename || "document"
+      });
+    } catch (error) {
+      alert("Failed to retry document processing.");
+      console.error(error);
+    }
+  };
+
   const formatSize = (bytes: number) => {
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
@@ -241,6 +261,7 @@ export const DocumentsPage: React.FC = () => {
   const getStatusBadge = (status: string) => {
     const s = status.toUpperCase();
     switch (s) {
+      case "READY":
       case "COMPLETED":
         return (
           <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shadow-sm">
@@ -248,10 +269,11 @@ export const DocumentsPage: React.FC = () => {
           </span>
         );
       case "PENDING":
+      case "UPLOADING":
       case "UPLOADED":
         return (
           <span className="flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20 shadow-sm animate-bounce">
-            <Clock className="h-3 w-3" /> Uploaded
+            <Clock className="h-3 w-3" /> Uploading
           </span>
         );
       case "FAILED":
@@ -261,26 +283,38 @@ export const DocumentsPage: React.FC = () => {
           </span>
         );
       case "PROCESSING":
+      case "EXTRACTING":
       case "TEXT_EXTRACTED":
+      case "CHUNKING":
       case "CHUNKED":
+      case "EMBEDDING":
       case "EMBEDDED":
+      case "INDEXING":
+      case "SUMMARY_GENERATION":
+      case "FLASHCARD_GENERATION":
       case "FLASHCARDS_READY":
+      case "QUIZ_GENERATION":
       case "QUIZZES_READY":
         let label = "Processing...";
         let icon = <Loader size="sm" />;
         let textClass = "text-blue-500 bg-blue-500/10 border-blue-500/20";
         
-        if (s === "TEXT_EXTRACTED") {
+        if (s === "EXTRACTING" || s === "TEXT_EXTRACTED") {
           label = "Extracting text";
-        } else if (s === "CHUNKED") {
+        } else if (s === "CHUNKING" || s === "CHUNKED") {
           label = "Chunking";
-        } else if (s === "EMBEDDED") {
+        } else if (s === "EMBEDDING" || s === "EMBEDDED") {
           label = "Creating embeddings";
-        } else if (s === "FLASHCARDS_READY") {
+        } else if (s === "INDEXING") {
+          label = "Indexing vectors";
+        } else if (s === "SUMMARY_GENERATION") {
+          label = "Generating AI summary";
+          icon = <span className="text-[10px]">⚡</span>;
+        } else if (s === "FLASHCARD_GENERATION" || s === "FLASHCARDS_READY") {
           label = "Generating AI flashcards";
           icon = <span className="text-[10px]">⚡</span>;
           textClass = "text-amber-500 bg-amber-500/10 border-amber-500/20";
-        } else if (s === "QUIZZES_READY") {
+        } else if (s === "QUIZ_GENERATION" || s === "QUIZZES_READY") {
           label = "Generating AI quizzes";
           icon = <span className="text-[10px]">⚡</span>;
           textClass = "text-purple-500 bg-purple-500/10 border-purple-500/20";
@@ -502,7 +536,7 @@ export const DocumentsPage: React.FC = () => {
             >
               <AnimatePresence>
                 {documents.map((doc) => {
-                  const isCompleted = doc.status === "completed";
+                  const isCompleted = doc.status.toUpperCase() === "COMPLETED" || doc.status.toUpperCase() === "READY";
                   return (
                     <motion.div
                       key={doc.id}
@@ -527,8 +561,20 @@ export const DocumentsPage: React.FC = () => {
                       </div>
 
                       <div className="flex justify-between items-center mt-4 pt-3 border-t border-border/10">
-                        <div>
+                        <div className="flex items-center gap-2">
                           {getStatusBadge(doc.status)}
+                          {doc.status.toUpperCase() === "FAILED" && (
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={(e) => { e.stopPropagation(); handleRetry(doc.id, e); }}
+                              className="p-1 text-indigo-500 hover:text-indigo-600 rounded-lg hover:bg-indigo-500/10 transition-colors flex items-center gap-0.5"
+                              title="Retry processing"
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              <span className="text-[9px] font-bold">Retry</span>
+                            </motion.button>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground/80 font-bold">
                           <span>{new Date(doc.created_at).toLocaleDateString()}</span>

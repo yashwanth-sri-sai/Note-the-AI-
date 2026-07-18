@@ -135,7 +135,7 @@ class RetrievalService:
                     .join(DocumentChunk, Embedding.chunk_id == DocumentChunk.id)
                     .join(Document, DocumentChunk.document_id == Document.id)
                     .where(Document.workspace_id == workspace_id)
-                    .where(Document.status == "completed")
+                    .where(Document.status.in_(["completed", "READY"]))
                 )
                 
                 if document_ids:

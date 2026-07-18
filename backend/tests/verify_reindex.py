@@ -22,6 +22,11 @@ async def verify_reindex_endpoint():
 
     async with async_session_factory() as db:
         # 1. Setup temporary workspace and user
+        # Clean up any leftover records from a previous failed run
+        await db.execute(delete(Workspace).where(Workspace.slug == "reindex-test-workspace"))
+        await db.execute(delete(User).where(User.email == "reindex_verify_user@example.com"))
+        await db.commit()
+
         user = User(
             id=uuid.uuid4(),
             email="reindex_verify_user@example.com",
@@ -40,7 +45,7 @@ async def verify_reindex_endpoint():
             file_size=1024,
             content_type="application/pdf",
             storage_path="local://reindex_test_doc.pdf",
-            status="completed",
+            status="READY",
             created_by=user.id
         )
         db.add(doc)
@@ -104,10 +109,11 @@ async def verify_reindex_endpoint():
                         stmt = select(Document).where(Document.id == doc.id)
                         res = await db.execute(stmt)
                         current_doc = res.scalar_one()
-                        if current_doc.status in ("completed", "failed"):
+                        await db.refresh(current_doc)
+                        if current_doc.status in ("failed", "READY", "FAILED"):
                             break
                     
-                    assert current_doc.status == "completed", f"Background pipeline failed, status={current_doc.status}"
+                    assert current_doc.status == "READY", f"Background pipeline failed, status={current_doc.status}"
                     print("  Background reindexing completed successfully.")
 
                     # Verify embedding was replaced
