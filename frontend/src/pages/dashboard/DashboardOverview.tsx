@@ -7,6 +7,7 @@ import { useChatConversations } from "@/hooks/useChatConversations";
 import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
+import { isDocumentReady } from "@/lib/document-status";
 import {
   BookOpen,
   Folder,
@@ -99,7 +100,7 @@ export const DashboardOverview: React.FC = () => {
   const recentNotes = useMemo(() => notes.slice(0, 3), [notes]);
   const recentDocs = useMemo(() => documents.slice(0, 2), [documents]);
   const recentChats = useMemo(() => conversations.slice(0, 1), [conversations]);
-  const completedDocs = useMemo(() => documents.filter((d) => d.status === "completed"), [documents]);
+  const completedDocs = useMemo(() => documents.filter((d) => isDocumentReady(d.status)), [documents]);
 
   // ── Loading ──
   if (isLoading) {
@@ -364,7 +365,7 @@ export const DashboardOverview: React.FC = () => {
                 <ContinueLearningCard
                   key={doc.id}
                   title={doc.filename}
-                  subtitle={doc.status === "completed" ? "Ready for study" : "Processing…"}
+                  subtitle={isDocumentReady(doc.status) ? "Ready for study" : "Processing…"}
                   type="document"
                   index={i + 2}
                   onClick={() => setActiveTab("documents")}

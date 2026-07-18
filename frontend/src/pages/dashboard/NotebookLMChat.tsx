@@ -14,6 +14,7 @@ import { AnimatedDrawer } from "@/components/motion/MotionSystem";
 import { useUploadDocument, useDeleteDocument } from "@/hooks/useDocuments";
 import { useKnowledgeSources } from "@/components/knowledge";
 import { useChatConversations, useCreateConversation } from "@/hooks/useChatConversations";
+import { isDocumentReady, isDocumentFailed } from "@/lib/document-status";
 
 // ConversationItem type is re-exported from useChatConversations
 
@@ -162,13 +163,13 @@ export const NotebookLMChat: React.FC = () => {
     if (progress === "processing" && file) {
       const activeDoc = documents.find((d) => d.title === file.name);
       if (activeDoc) {
-        if (activeDoc.status === "completed") {
+        if (isDocumentReady(activeDoc.status)) {
           setUploadProgress("completed");
           setTimeout(() => {
             setUploadProgress(null);
             setUploadFile(null);
           }, 3000);
-        } else if (activeDoc.status === "failed") {
+        } else if (isDocumentFailed(activeDoc.status)) {
           setUploadProgress("failed");
           setUploadError("Text extraction or embedding generation failed.");
           setTimeout(() => {
@@ -490,7 +491,7 @@ export const NotebookLMChat: React.FC = () => {
 
   // Toggle All Documents in selection
   const handleToggleAllDocs = () => {
-    const activeDocs = documents.filter((d) => d.status === "completed").map((d) => d.id);
+    const activeDocs = documents.filter((d) => isDocumentReady(d.status)).map((d) => d.id);
     if (selectedDocIds.length === activeDocs.length) {
       setSelectedDocIds([]);
     } else {
@@ -657,13 +658,13 @@ export const NotebookLMChat: React.FC = () => {
           
           <div className="space-y-2">
             <div className="flex justify-between items-center text-[10px] font-extrabold text-muted-foreground">
-              <span>ACTIVE DOCUMENTS ({selectedDocIds.length}/{documents.filter(d => d.status === "completed").length})</span>
-              {documents.filter(d => d.status === "completed").length > 0 && (
+              <span>ACTIVE DOCUMENTS ({selectedDocIds.length}/{documents.filter(d => isDocumentReady(d.status)).length})</span>
+              {documents.filter(d => isDocumentReady(d.status)).length > 0 && (
                 <button
                   onClick={handleToggleAllDocs}
                   className="hover:text-primary transition-colors text-[10px] font-bold"
                 >
-                  {selectedDocIds.length === documents.filter(d => d.status === "completed").length ? "Deselect All" : "Select All"}
+                  {selectedDocIds.length === documents.filter(d => isDocumentReady(d.status)).length ? "Deselect All" : "Select All"}
                 </button>
               )}
             </div>
@@ -686,7 +687,7 @@ export const NotebookLMChat: React.FC = () => {
             ) : (
               <div className="space-y-1.5">
                 {documents.map((doc) => {
-                  const isCompleted = doc.status === "completed";
+                  const isCompleted = isDocumentReady(doc.status);
                   const isSelected = selectedDocIds.includes(doc.id);
                   const fileSize = doc.metadata.file_size || 0;
                   const contentType = doc.metadata.content_type || "text/plain";

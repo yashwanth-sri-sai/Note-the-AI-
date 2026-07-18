@@ -7,6 +7,7 @@ import { Loader } from "../../components/ui/Loader";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUIStore } from "@/store/ui-store";
 import { useDocuments, useUploadDocument, useDeleteDocument, useRetryDocument, DocumentItem } from "@/hooks/useDocuments";
+import { isDocumentReady, isDocumentFailed } from "@/lib/document-status";
 
 export const DocumentsPage: React.FC = () => {
   const { data: documents = [], isLoading, refetch } = useDocuments();
@@ -51,10 +52,10 @@ export const DocumentsPage: React.FC = () => {
         else if (s === "FLASHCARD_GENERATION" || s === "FLASHCARDS_READY") message = "Generating AI flashcards...";
         else if (s === "QUIZ_GENERATION" || s === "QUIZZES_READY") message = "Generating AI quizzes...";
 
-        if (s === "READY" || s === "COMPLETED") {
+        if (isDocumentReady(s)) {
           setUploadStatus({ status: "completed", message: "Document processed successfully!" });
           setTimeout(() => setUploadStatus({ status: "idle" }), 3000);
-        } else if (s === "FAILED") {
+        } else if (isDocumentFailed(s)) {
           setUploadStatus({ status: "failed", message: "Failed to extract or embed document contents." });
           setTimeout(() => setUploadStatus({ status: "idle" }), 4000);
         } else if (message !== current.message) {
@@ -536,7 +537,7 @@ export const DocumentsPage: React.FC = () => {
             >
               <AnimatePresence>
                 {documents.map((doc) => {
-                  const isCompleted = doc.status.toUpperCase() === "COMPLETED" || doc.status.toUpperCase() === "READY";
+                  const isCompleted = isDocumentReady(doc.status);
                   return (
                     <motion.div
                       key={doc.id}
@@ -563,7 +564,7 @@ export const DocumentsPage: React.FC = () => {
                       <div className="flex justify-between items-center mt-4 pt-3 border-t border-border/10">
                         <div className="flex items-center gap-2">
                           {getStatusBadge(doc.status)}
-                          {doc.status.toUpperCase() === "FAILED" && (
+                          {isDocumentFailed(doc.status) && (
                             <motion.button
                               whileHover={{ scale: 1.1 }}
                               whileTap={{ scale: 0.9 }}

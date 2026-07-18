@@ -3,6 +3,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
 import { useNotes, useCreateNote } from "@/hooks/useNotes";
 import { apiClient } from "@/lib/api-client";
+import { isDocumentReady } from "@/lib/document-status";
 import { useFolders } from "@/hooks/useFolders";
 import { useTags } from "@/hooks/useTags";
 import { useChatConversations } from "@/hooks/useChatConversations";
@@ -125,7 +126,7 @@ export const Dashboard: React.FC = () => {
     ? documents.filter(
         (d) =>
           d.filename.toLowerCase().includes(query) &&
-          d.status === "completed"
+          isDocumentReady(d.status)
       )
     : [];
 

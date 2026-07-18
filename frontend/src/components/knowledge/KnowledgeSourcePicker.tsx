@@ -3,6 +3,7 @@ import { Search, Files, FileText, Star, Clock } from "lucide-react";
 import { useKnowledgeSources } from "@/hooks/useKnowledgeSources";
 import { KnowledgeSourceCard } from "./KnowledgeSourceCard";
 import { KnowledgeSource } from "@/types";
+import { isDocumentReady } from "@/lib/document-status";
 
 interface KnowledgeSourcePickerProps {
   selectedSourceId: string | null;
@@ -55,7 +56,7 @@ export const KnowledgeSourcePicker: React.FC<KnowledgeSourcePickerProps> = ({
     if (
       !allowProcessing &&
       source.source_type === "document" &&
-      source.status.toLowerCase() !== "completed"
+      !isDocumentReady(source.status)
     ) {
       return false;
     }

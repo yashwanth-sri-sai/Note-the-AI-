@@ -3,6 +3,7 @@ import { KnowledgeSource } from "@/types";
 import { KnowledgeSourceIcon } from "./KnowledgeSourceIcon";
 import { KnowledgeSourceBadge } from "./KnowledgeSourceBadge";
 import { Star } from "lucide-react";
+import { isDocumentReady, isDocumentProcessing } from "@/lib/document-status";
 
 interface KnowledgeSourceCardProps {
   source: KnowledgeSource;
@@ -52,12 +53,8 @@ export const KnowledgeSourceCard: React.FC<KnowledgeSourceCardProps> = ({
     }
   };
 
-  // Normalize to lowercase once so all comparisons are case-insensitive.
-  // The ingestion pipeline stores uppercase statuses ("UPLOADED", "COMPLETED", etc.)
-  // while the type contract uses lowercase. Normalizing here handles both.
-  const statusNorm = source.status.toLowerCase();
-  const isReady = statusNorm === "completed" || statusNorm === "ready";
-  const isProcessing = !isReady && statusNorm !== "failed";
+  const isReady = isDocumentReady(source.status);
+  const isProcessing = isDocumentProcessing(source.status);
 
   return (
     <button
