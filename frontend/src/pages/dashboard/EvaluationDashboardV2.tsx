@@ -75,27 +75,27 @@ export const EvaluationDashboardV2: React.FC = () => {
   return (
     <div className="h-full flex flex-col min-h-0 text-foreground">
       {/* ── Page Header ── */}
-      <header className="flex items-center justify-between pb-6 border-b border-white/[0.02] shrink-0">
+      <header className="flex items-center justify-between pb-6 border-b border-border shrink-0">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/10">
-            <Sparkles className="h-4 w-4 text-emerald-400" />
+          <div className="h-8 w-8 rounded-btn bg-primary/10 flex items-center justify-center border border-primary/20">
+            <Sparkles className="h-4 w-4 text-primary" />
           </div>
           <div>
-            <h1 className="text-sm font-semibold tracking-tight text-foreground/90">Observability</h1>
-            <p className="text-[10px] text-muted-foreground/40 font-medium">Evaluation metrics and run diagnostics</p>
+            <h1 className="text-sm font-semibold tracking-tight text-foreground">Observability</h1>
+            <p className="text-[10px] text-muted-foreground font-medium">Evaluation metrics and run diagnostics</p>
           </div>
         </div>
 
-        <nav className="flex items-center bg-white/[0.01] border border-white/[0.02] rounded-lg p-0.5">
+        <nav className="flex items-center clay-card rounded-btn p-0.5">
           {(["overview", "questions"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setView(tab)}
               className={`
-                px-3 py-1.5 text-[10px] tracking-wide font-medium rounded-md transition-all duration-200
+                px-3 py-1.5 text-[10px] tracking-wide font-medium rounded-btn transition-all duration-200
                 ${view === tab
-                  ? "text-foreground bg-white/[0.03] shadow-[0_1px_2px_rgba(0,0,0,0.5)] border border-white/[0.01]"
-                  : "text-muted-foreground/50 hover:text-muted-foreground"
+                  ? "text-foreground bg-surface shadow-sm border border-border"
+                  : "text-muted-foreground hover:text-foreground"
                 }
               `}
             >

@@ -94,11 +94,10 @@ export const ContinueLearningCard: React.FC<ContinueLearningCardProps> = ({
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       aria-label={`Continue ${cfg.label}: ${title}`}
-      className="relative group flex items-stretch gap-0 rounded-2xl border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.035] hover:border-white/[0.09] cursor-pointer transition-colors duration-200 overflow-hidden select-none"
-      style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.18)" }}
+      className="relative group flex items-stretch gap-0 rounded-lg clay-card cursor-pointer overflow-hidden select-none"
     >
       {/* Left accent stripe */}
-      <div className={`w-1 shrink-0 ${cfg.stripe} opacity-70 rounded-l-2xl`} />
+      <div className={`w-1 shrink-0 ${cfg.stripe} opacity-70 rounded-l-lg`} />
 
       {/* Content */}
       <div className="flex-1 p-4 space-y-2.5 min-w-0">

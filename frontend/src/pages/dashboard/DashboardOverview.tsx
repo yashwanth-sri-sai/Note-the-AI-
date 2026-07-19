@@ -125,12 +125,7 @@ export const DashboardOverview: React.FC = () => {
       >
         {/* Hero empty state */}
         <div
-          className="relative p-10 rounded-3xl border border-indigo-500/15 overflow-hidden"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(93,124,255,0.10) 0%, rgba(139,92,246,0.06) 60%, transparent 100%)",
-            boxShadow: "0 8px 40px rgba(93,124,255,0.10)",
-          }}
+          className="relative p-10 rounded-lg clay-card overflow-hidden"
         >
           <div className="absolute top-0 right-0 w-72 h-72 rounded-full blur-[90px] opacity-40 pointer-events-none"
             style={{ background: "radial-gradient(circle, rgba(93,124,255,0.20) 0%, transparent 70%)", transform: "translate(30%, -30%)" }} />

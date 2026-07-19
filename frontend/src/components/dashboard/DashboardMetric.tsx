@@ -89,8 +89,8 @@ export const DashboardMetric: React.FC<DashboardMetricProps> = ({
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
       aria-label={onClick ? `View ${title}` : undefined}
-      className={`relative flex flex-col justify-between p-5 rounded-2xl border border-white/[0.05] bg-white/[0.02] overflow-hidden ${onClick ? "cursor-pointer select-none" : ""} transition-colors hover:bg-white/[0.035] hover:border-white/[0.09]`}
-      style={{ boxShadow: `0 4px 20px ${scheme.glow}, 0 1px 0 rgba(255,255,255,0.04) inset` }}
+      className={`relative flex flex-col justify-between p-6 rounded-lg clay-card overflow-hidden ${onClick ? "cursor-pointer select-none" : ""}`}
+      style={{ borderLeftWidth: "4px", borderLeftColor: `hsl(var(--${color === "indigo" ? "primary" : color === "sky" ? "cyan" : color}))` }}
     >
       {/* Top gradient stripe — 2px color accent bar */}
       <div

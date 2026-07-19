@@ -346,7 +346,7 @@ export const DashboardV2: React.FC = () => {
     };
 
     return (
-      <div className="flex flex-col justify-between h-full bg-gradient-to-b from-[#F7F9FC] via-[#F2F5FA] to-[#E2E8F0] dark:from-[#081018] dark:via-[#101A2C] dark:to-[#172338] border-r border-border">
+      <div className="flex flex-col justify-between h-full bg-[#FAFCFF] dark:bg-[#03070C] border-r border-border">
         <div className="flex flex-col overflow-y-auto max-h-[calc(100vh-6rem)] flex-grow scrollbar">
           {/* Logo Brand */}
           <div className="h-14 flex items-center px-4.5 gap-3 border-b border-border shrink-0">
@@ -381,10 +381,10 @@ export const DashboardV2: React.FC = () => {
                     }
                     if (isMobileView) setMobileSidebarOpen(false);
                   }}
-                  className={`relative flex items-center gap-2.5 w-full px-2.5 py-2 text-[11px] font-semibold rounded-xl transition-all duration-200 group ${
+                  className={`relative flex items-center gap-2.5 w-full px-3 py-2.5 text-[11px] font-semibold rounded-btn transition-all duration-200 group ${
                     isActive
-                      ? "text-primary bg-primary/8 shadow-[0_0_12px_rgba(79,209,197,0.12)] border border-primary/20"
-                      : "text-secondary-text hover:text-primary-text hover:bg-secondary hover:-translate-y-0.5"
+                      ? "text-primary bg-primary/10 border border-primary/20"
+                      : "text-secondary-text hover:text-primary-text hover:bg-secondary/70"
                   }`}
                 >
                   {isActive && (
@@ -723,7 +723,7 @@ export const DashboardV2: React.FC = () => {
               {/* Quick Search trigger box */}
               <div
                 onClick={() => setShowSearchModal(true)}
-                className="relative hidden sm:flex items-center w-56 rounded-lg border border-border bg-surface hover:bg-surface-secondary py-1 px-2.5 cursor-pointer text-muted-foreground/50 select-none transition-colors shadow-sm"
+                className="relative hidden sm:flex items-center w-56 rounded-input clay-card py-1 px-2.5 cursor-pointer text-muted-foreground/50 select-none"
               >
                 <Search className="h-3.5 w-3.5 mr-2 text-muted-foreground/35 shrink-0" />
                 <span className="text-[11px] font-medium">Search workspace...</span>
@@ -848,7 +848,7 @@ export const DashboardV2: React.FC = () => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
               transition={{ duration: 0.18, ease: "easeOut" }}
-              className="w-full max-w-lg bg-surface/95 border border-white/[0.04] p-4 rounded-xl shadow-2xl space-y-3 bg-card"
+              className="w-full max-w-lg clay-panel p-5 rounded-dialog space-y-3"
             >
               <div className="relative flex items-center border-b border-border pb-2">
                 <Search className="h-4.5 w-4.5 text-muted-text mr-3 shrink-0" />

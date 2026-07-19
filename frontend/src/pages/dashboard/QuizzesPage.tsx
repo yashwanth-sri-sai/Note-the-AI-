@@ -299,7 +299,7 @@ export const QuizzesPage: React.FC = () => {
                       key={q.id}
                       whileHover={{ scale: 1.015, y: -2 }}
                       onClick={() => setActiveQuiz(q)}
-                      className="relative overflow-hidden p-4.5 flex justify-between items-center cursor-pointer rounded-2xl bg-card/65 backdrop-blur-md border border-primary/20 shadow-[0_0_12px_rgba(79,209,197,0.04)] hover:border-primary/45 hover:shadow-[0_0_16px_rgba(79,209,197,0.08)] transition-all duration-300 group"
+                      className="relative overflow-hidden p-4.5 flex justify-between items-center cursor-pointer rounded-lg clay-card group"
                     >
                       {/* Subtle shimmer background decoration */}
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-primary/[0.02] to-transparent -translate-x-full group-hover:animate-shimmer" />
@@ -358,7 +358,7 @@ export const QuizzesPage: React.FC = () => {
                   <motion.div
                     initial={{ scale: 0.93, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="clay-panel p-6 flex flex-col sm:flex-row items-center justify-between gap-6 border-emerald-500/20 bg-emerald-500/5 shadow-md"
+                    className="clay-card rounded-lg p-6 flex flex-col sm:flex-row items-center justify-between gap-6 border-l-4 border-l-emerald-500 bg-emerald-500/5"
                   >
                     <div className="flex items-center gap-4 text-left">
                       <div className="h-16 w-16 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 shadow-inner border border-emerald-500/20">
@@ -396,11 +396,11 @@ export const QuizzesPage: React.FC = () => {
                       <motion.div
                         key={q.id}
                         variants={itemVariants}
-                        className={`clay-card p-5 border-l-4 transition-all bg-card/75 shadow-sm ${
+                        className={`clay-card rounded-lg p-5 border-l-4 transition-all ${
                           submissionResult
                             ? result?.is_correct
                               ? "border-l-emerald-500 bg-emerald-500/5"
-                              : "border-l-red-500 bg-red-500/5"
+                              : "border-l-rose-500 bg-rose-500/5"
                             : selected
                             ? "border-l-primary"
                             : "border-l-transparent"
@@ -424,16 +424,16 @@ export const QuizzesPage: React.FC = () => {
                                 whileTap={!submissionResult ? { scale: 0.99 } : {}}
                                 disabled={!!submissionResult}
                                 onClick={() => handleAnswerSelect(q.id, choice)}
-                                className={`text-left p-3.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between ${
+                                className={`text-left p-3.5 rounded-btn border text-xs font-bold transition-all flex items-center justify-between ${
                                   submissionResult
                                     ? isCorrect
                                       ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-extrabold"
                                       : isIncorrectUserChoice
-                                      ? "bg-red-500/15 border-red-500/30 text-red-600 dark:text-red-400 font-extrabold"
+                                      ? "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400 font-extrabold"
                                       : "bg-muted/10 border-border/40 text-muted-foreground opacity-60"
                                     : isSelected
-                                    ? "bg-primary/10 border-primary text-primary shadow-inner"
-                                    : "bg-card hover:bg-muted/40 border-border/50 text-foreground"
+                                    ? "bg-primary/10 border-primary text-primary"
+                                    : "bg-surface hover:bg-surface-secondary border-border text-foreground"
                                 }`}
                               >
                                 <span>{choice}</span>

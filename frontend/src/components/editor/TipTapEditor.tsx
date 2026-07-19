@@ -72,7 +72,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
   }
 
   return (
-    <div className="w-full flex flex-col rounded-2xl border border-border/60 bg-card/20 shadow-inner overflow-hidden">
+    <div className="w-full flex flex-col rounded-dialog border border-border overflow-hidden">
       {/* Fixed Formatting Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-1 p-1.5 bg-muted/10 border-b border-border/40 sticky top-0 z-10 backdrop-blur-sm shrink-0">
         <div className="flex flex-wrap items-center gap-1">
@@ -242,7 +242,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
           <FloatingMenu
             editor={editor}
             tippyOptions={{ duration: 100, placement: "right" }}
-            className="flex flex-col gap-1 p-2 bg-popover/95 border border-border/80 rounded-2xl shadow-2xl backdrop-blur-md z-50 min-w-[160px]"
+            className="flex flex-col gap-1 p-2 rounded-dialog clay-panel z-50 min-w-[160px]"
           >
             <div className="px-2 pb-1 text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">
               Insert
@@ -291,7 +291,7 @@ export const TipTapEditor: React.FC<TipTapEditorProps> = ({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.92, y: 6 }}
               transition={{ type: "spring", stiffness: 450, damping: 28 }}
-              className="flex items-center gap-1 p-1 bg-popover/90 border border-border/80 rounded-2xl shadow-xl backdrop-blur-md"
+              className="flex items-center gap-1 p-1 rounded-dialog clay-panel"
             >
               <motion.button
                 whileHover={{ scale: 1.05 }}

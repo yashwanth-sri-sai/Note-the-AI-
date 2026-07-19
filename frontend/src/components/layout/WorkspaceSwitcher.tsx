@@ -48,10 +48,10 @@ export const WorkspaceSwitcher: React.FC = () => {
       {/* Dropdown Trigger */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border border-border bg-card hover:bg-secondary hover:border-border transition-all text-left shadow-sm"
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-btn clay-card text-left"
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-500 font-semibold text-xs border border-indigo-500/25">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-semibold text-xs border border-primary/25">
             <Briefcase className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex flex-col">
@@ -72,7 +72,7 @@ export const WorkspaceSwitcher: React.FC = () => {
           {/* Backdrop to close dropdown on click outside */}
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
           
-          <div className="absolute left-0 right-0 mt-2 p-1.5 z-50 rounded-xl border border-border bg-card shadow-xl animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="absolute left-0 right-0 mt-2 p-1.5 z-50 rounded-btn clay-panel animate-in fade-in slide-in-from-top-2 duration-150">
             <div className="px-2 py-1.5 text-[10px] font-bold text-muted-text uppercase tracking-wider">
               Switch Workspace
             </div>

@@ -382,7 +382,7 @@ export const DocumentsPage: React.FC = () => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-3xl border-4 border-dashed border-primary bg-background/95 backdrop-blur-md shadow-2xl p-8 text-center pointer-events-none"
+            className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-dialog border-2 border-dashed border-primary bg-background/95 backdrop-blur-md shadow-2xl p-8 text-center pointer-events-none"
           >
             <div className="p-6 rounded-full bg-primary/10 text-primary mb-4 animate-bounce">
               <Upload className="h-10 w-10" />
@@ -397,7 +397,7 @@ export const DocumentsPage: React.FC = () => {
 
       <div className="flex justify-between items-center px-1">
         <div>
-          <h2 className="text-xl font-extrabold tracking-tight md:text-2xl bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">
+          <h2 className="text-xl font-bold tracking-tight text-foreground">
             Documents Library
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -457,7 +457,7 @@ export const DocumentsPage: React.FC = () => {
             <motion.button 
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className="mt-4 flex items-center gap-1.5 px-4 py-2 text-xs font-bold clay-btn bg-primary text-white"
+              className="mt-4 flex items-center gap-1.5 px-4 py-2 text-xs font-bold clay-btn-primary"
             >
               <Plus className="h-3.5 w-3.5" /> Choose File
             </motion.button>

@@ -37,18 +37,18 @@ export const v2SpringTransition = {
    ═══════════════════════════════════════════════════════════ */
 export const v2TooltipStyle = {
   contentStyle: {
-    backgroundColor: "rgba(15, 17, 23, 0.95)",
-    border: "1px solid rgba(255, 255, 255, 0.04)",
-    borderRadius: "8px",
+    backgroundColor: "hsl(var(--card))",
+    border: "1px solid hsl(var(--border))",
+    borderRadius: "10px",
     fontSize: "11px",
     fontFamily: "Inter, sans-serif",
     padding: "6px 10px",
-    boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
-    color: "#f3f4f6",
+    boxShadow: "0 10px 30px rgba(0, 0, 0, 0.12)",
+    color: "hsl(var(--foreground))",
     backdropFilter: "blur(8px)",
   },
-  itemStyle: { color: "#9ca3af", fontSize: "11px", padding: "1px 0" },
-  cursor: { stroke: "rgba(255, 255, 255, 0.04)", strokeWidth: 1 },
+  itemStyle: { color: "hsl(var(--muted-foreground))", fontSize: "11px", padding: "1px 0" },
+  cursor: { stroke: "hsl(var(--border))", strokeWidth: 1 },
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -83,10 +83,8 @@ interface GlassPanelV2Props {
 
 export const GlassPanelV2: React.FC<GlassPanelV2Props> = ({ children, className = "", noPadding }) => (
   <div className={`
-    bg-surface/30
-    border border-white/[0.02]
-    rounded-xl
-    shadow-sm
+    clay-card
+    rounded-lg
     ${noPadding ? "" : "p-6"}
     ${className}
   `}>

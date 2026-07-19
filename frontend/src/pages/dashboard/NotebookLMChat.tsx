@@ -626,7 +626,7 @@ export const NotebookLMChat: React.FC = () => {
 
         {/* Upload & Processing Status Bar */}
         {uploadProgress && (
-          <div className="mx-4 mt-3 p-3 rounded-2xl bg-card border border-border/70 flex items-center gap-3 animate-fadeIn shadow-sm">
+          <div className="mx-4 mt-3 p-3 rounded-btn clay-card flex items-center gap-3 animate-fadeIn">
             {uploadProgress === "uploading" && <Loader size="sm" />}
             {uploadProgress === "processing" && <Loader size="sm" />}
             {uploadProgress === "completed" && <CheckCircle2 className="h-4 w-4 text-green-500" />}
@@ -696,8 +696,8 @@ export const NotebookLMChat: React.FC = () => {
                       key={doc.id}
                       whileHover={isCompleted ? { x: 2 } : {}}
                       onClick={() => isCompleted && handleToggleDoc(doc.id)}
-                      className={`group flex items-center justify-between p-3 rounded-xl border border-border/60 hover:border-primary/40 cursor-pointer transition-all ${
-                        isSelected ? "bg-primary/5 border-primary/20" : "bg-card/45 hover:bg-muted/15"
+                      className={`group flex items-center justify-between p-3 rounded-btn border cursor-pointer transition-all ${
+                        isSelected ? "bg-primary/10 border-primary/30" : "bg-card border-border/60 hover:border-primary/30 hover:bg-muted/10"
                       } ${!isCompleted ? "opacity-60 cursor-not-allowed" : ""}`}
                     >
                       <div className="flex items-center gap-2.5 truncate flex-grow text-left">
@@ -942,7 +942,7 @@ export const NotebookLMChat: React.FC = () => {
                     key={idx}
                     whileHover={{ scale: 1.01, y: -2 }}
                     onClick={() => handleSendMessage(item.prompt)}
-                    className="p-4 rounded-2xl border border-border/80 bg-card/45 hover:border-primary/50 hover:bg-primary/5 cursor-pointer transition-all shadow-sm flex items-start gap-3 group"
+                    className="p-4 rounded-btn clay-card cursor-pointer flex items-start gap-3 group"
                   >
                     <Sparkles className="h-4.5 w-4.5 text-primary shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
                     <div className="flex-1 min-w-0">
@@ -985,10 +985,10 @@ export const NotebookLMChat: React.FC = () => {
                     <div className="space-y-2 max-w-[85%]">
                       {/* Message Bubble Box */}
                       <div
-                        className={`rounded-2xl p-4 border transition-all duration-300 ${
+                        className={`rounded-btn p-4 border transition-all duration-200 ${
                           isUser
-                            ? "bg-gradient-to-tr from-primary to-indigo-600 text-white border-primary/20 shadow-md shadow-primary/25"
-                            : "bg-card/65 backdrop-blur-md border-primary/25 shadow-[0_0_12px_rgba(79,209,197,0.05)] hover:border-primary/45 hover:shadow-[0_0_16px_rgba(79,209,197,0.1)]"
+                            ? "bg-primary text-white border-primary/30 shadow-lg shadow-primary/20"
+                            : "bg-card border-border/70 shadow-sm hover:border-border"
                         }`}
                       >
                         {/* AI Header Badge for assistant message */}
@@ -1055,7 +1055,7 @@ export const NotebookLMChat: React.FC = () => {
                                 key={ref.chunk_uuid || idx}
                                 whileHover={{ y: -1.5, scale: 1.01 }}
                                 onClick={() => setActiveCitationPreview(ref)}
-                                className="p-2 rounded-xl bg-card border border-border/80 hover:border-primary/40 hover:bg-primary/5 cursor-pointer transition-all flex items-start gap-2.5 group shadow-sm"
+                                className="p-2 rounded-btn clay-card cursor-pointer flex items-start gap-2.5 group"
                               >
                                 <span className="h-5 w-5 rounded bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">
                                   {idx + 1}
@@ -1121,7 +1121,7 @@ export const NotebookLMChat: React.FC = () => {
         </div>
 
         {/* Chat Message Input Container */}
-        <div className="p-4 border-t border-border/80 bg-card/25 backdrop-blur-md flex flex-col gap-2 shrink-0">
+        <div className="p-4 border-t border-border bg-background/80 backdrop-blur-md flex flex-col gap-2 shrink-0">
           
           <div className="flex gap-2 max-w-3xl mx-auto w-full relative">
             <textarea
@@ -1140,7 +1140,7 @@ export const NotebookLMChat: React.FC = () => {
                   : "Ask a question about all workspace documents..."
               }
               disabled={isStreaming}
-              className="flex-grow rounded-2xl border border-border/80 bg-background/50 hover:bg-background/80 focus:border-primary py-3.5 pl-4 pr-12 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none resize-none focus:ring-0 max-h-32 transition-colors scrollbar text-left animate-fadeIn"
+              className="flex-grow rounded-input clay-input py-3.5 pl-4 pr-14 text-sm placeholder:text-muted-foreground/50 outline-none resize-none max-h-32 scrollbar text-left"
             />
             
             {/* Send Button */}
@@ -1149,9 +1149,9 @@ export const NotebookLMChat: React.FC = () => {
               whileTap={{ scale: 0.95 }}
               onClick={() => handleSendMessage()}
               disabled={isStreaming || !questionInput.trim()}
-              className={`absolute right-2 top-2 h-9 w-9 rounded-xl flex items-center justify-center transition-all ${
+              className={`absolute right-2 top-2 h-9 w-9 rounded-btn flex items-center justify-center transition-all ${
                 questionInput.trim() && !isStreaming
-                  ? "bg-primary text-white shadow-md shadow-primary/20"
+                  ? "clay-btn-primary"
                   : "bg-muted text-muted-foreground cursor-not-allowed"
               }`}
             >
@@ -1163,8 +1163,8 @@ export const NotebookLMChat: React.FC = () => {
             </motion.button>
           </div>
           
-          <p className="text-[10px] text-muted-foreground text-center font-medium">
-            NoteAI citations mapping matches segment vectors exactly. Model parameters: Temp 0.0, Context Limit 4000 tokens.
+          <p className="text-[10px] text-muted-foreground/60 text-center font-medium">
+            Citations map to exact source chunks · Temp 0.0 · 4k context window
           </p>
         </div>
       </div>
@@ -1198,13 +1198,13 @@ export const NotebookLMChat: React.FC = () => {
 
               {/* Info Cards */}
               <div className="grid grid-cols-2 gap-3 text-[11px] font-semibold text-muted-foreground shrink-0">
-                <div className="p-3 rounded-2xl border border-border/60 bg-background/30 shadow-inner">
+                <div className="p-3 rounded-btn clay-card">
                   <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60 font-bold">Position</span>
                   <span className="text-foreground font-black mt-1 block">
                     {activeCitationPreview.page_number ? `Page ${activeCitationPreview.page_number}` : activeCitationPreview.section_title ? `Section: ${activeCitationPreview.section_title}` : "Reference Chunk"}
                   </span>
                 </div>
-                <div className="p-3 rounded-2xl border border-border/60 bg-background/30 shadow-inner">
+                <div className="p-3 rounded-btn clay-card">
                   <span className="block text-[9px] uppercase tracking-wider text-muted-foreground/60 font-bold">Similarity</span>
                   <span className="text-foreground font-black mt-1 block">
                     {activeCitationPreview.similarity_score ? `${Math.round(activeCitationPreview.similarity_score * 100)}% Match` : "N/A"}
@@ -1215,7 +1215,7 @@ export const NotebookLMChat: React.FC = () => {
               {/* Text extract */}
               <div className="space-y-2 flex-grow flex flex-col min-h-0">
                 <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">Semantic Source Extract</label>
-                <div className="p-4 rounded-2xl bg-muted/50 border border-border/40 overflow-y-auto flex-grow scrollbar max-h-[55vh]">
+                <div className="p-4 rounded-btn bg-muted/40 border border-border/50 overflow-y-auto flex-grow scrollbar max-h-[55vh]">
                   <p className="text-xs text-foreground leading-relaxed whitespace-pre-wrap select-all font-medium">
                     {activeCitationPreview.chunk_text}
                   </p>
@@ -1248,7 +1248,7 @@ export const NotebookLMChat: React.FC = () => {
             width: "280px",
             zIndex: 100,
           }}
-          className="pointer-events-none p-3.5 rounded-2xl border border-border/80 bg-card/95 backdrop-blur-md shadow-2xl text-left"
+          className="pointer-events-none p-3.5 rounded-btn clay-panel shadow-2xl text-left"
         >
           <div className="flex items-center justify-between border-b border-border/20 pb-1.5 mb-1.5">
             <span className="text-[9px] uppercase tracking-wider text-primary font-black truncate max-w-[180px]">

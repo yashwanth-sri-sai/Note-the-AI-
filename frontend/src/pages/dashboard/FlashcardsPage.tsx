@@ -202,7 +202,7 @@ export const FlashcardsPage: React.FC = () => {
               exit={{ opacity: 0 }}
               className="flex-grow flex items-center justify-center p-8 clay-panel h-full"
             >
-              <div className="w-full max-w-md h-64 rounded-2xl border border-white/[0.03] bg-white/[0.01] p-6 flex flex-col justify-between animate-pulse">
+              <div className="w-full max-w-md h-64 rounded-lg clay-card p-6 flex flex-col justify-between animate-pulse">
                 <div className="space-y-3">
                   <div className="h-4.5 w-1/3 rounded bg-white/[0.04]" />
                   <div className="h-3.5 w-full rounded bg-white/[0.02]" />
@@ -352,7 +352,7 @@ export const FlashcardsPage: React.FC = () => {
                   >
                     {/* Front of Card */}
                     <div 
-                      className="absolute inset-0 w-full h-full rounded-3xl p-8 flex flex-col justify-center items-center text-center border border-primary/20 bg-card/75 shadow-[0_0_15px_rgba(79,209,197,0.06)] hover:border-primary/45 transition-all duration-300"
+                      className="absolute inset-0 w-full h-full rounded-lg p-8 flex flex-col justify-center items-center text-center clay-card cursor-pointer"
                       style={{ backfaceVisibility: "hidden" }}
                     >
                       <div className="absolute top-4 left-4 flex items-center gap-1.5 select-none">
@@ -373,7 +373,7 @@ export const FlashcardsPage: React.FC = () => {
 
                     {/* Back of Card */}
                     <div 
-                      className="absolute inset-0 w-full h-full rounded-3xl p-8 flex flex-col justify-center items-center text-center border border-emerald-500/20 bg-card/75 shadow-[0_0_15px_rgba(94,230,168,0.06)] hover:border-emerald-500/40 transition-all duration-300"
+                      className="absolute inset-0 w-full h-full rounded-lg p-8 flex flex-col justify-center items-center text-center clay-card cursor-pointer"
                       style={{ 
                         backfaceVisibility: "hidden", 
                         transform: "rotateY(180deg)" 
@@ -410,7 +410,7 @@ export const FlashcardsPage: React.FC = () => {
                         whileTap={{ scale: 0.95 }}
                         onClick={() => handleReview(rev.value)}
                         disabled={isSubmitting}
-                        className={`flex-grow md:flex-grow-0 px-4 py-2.5 text-xs font-bold rounded-xl border transition-all clay-btn ${rev.color}`}
+                        className={`flex-grow md:flex-grow-0 px-4 py-2.5 text-xs font-bold rounded-btn border transition-all clay-btn ${rev.color}`}
                       >
                         {rev.value} - {rev.label}
                       </motion.button>

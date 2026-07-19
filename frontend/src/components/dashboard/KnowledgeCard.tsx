@@ -102,8 +102,7 @@ export const KnowledgeCard: React.FC<KnowledgeCardProps> = ({
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
       aria-label={onClick ? `View ${label}` : undefined}
-      className={`relative flex flex-col gap-3 p-5 rounded-2xl border border-white/[0.05] bg-gradient-to-br ${scheme.gradient} to-transparent overflow-hidden transition-colors duration-200 hover:border-white/[0.09] hover:bg-white/[0.025] ${onClick ? "cursor-pointer select-none" : ""}`}
-      style={{ boxShadow: `0 4px 20px ${scheme.glow}` }}
+      className={`relative flex flex-col gap-3 p-5 rounded-lg clay-card overflow-hidden ${onClick ? "cursor-pointer select-none" : ""}`}
     >
       {/* Ambient glow */}
       <div

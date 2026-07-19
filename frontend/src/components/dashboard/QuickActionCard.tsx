@@ -90,8 +90,7 @@ export const QuickActionCard: React.FC<QuickActionCardProps> = ({
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
       aria-label={label}
-      className={`group relative flex flex-col justify-between gap-4 p-5 min-h-[130px] rounded-2xl border border-white/[0.05] bg-gradient-to-br ${scheme.gradient} to-transparent cursor-pointer select-none overflow-hidden transition-colors duration-200 ${scheme.hover} hover:bg-white/[0.03]`}
-      style={{ boxShadow: `0 4px 24px ${scheme.glow}` }}
+      className={`group relative flex flex-col justify-between gap-4 p-5 min-h-[130px] rounded-lg clay-card cursor-pointer select-none overflow-hidden`}
     >
       {/* Top accent stripe */}
       <div

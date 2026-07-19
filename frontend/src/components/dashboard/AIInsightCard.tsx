@@ -87,8 +87,7 @@ export const AIInsightCard: React.FC<AIInsightCardProps> = ({
         ease: [0.16, 1, 0.3, 1],
       }}
       whileHover={shouldReduceMotion ? {} : { y: -2, scale: 1.008 }}
-      className={`relative p-5 rounded-2xl border bg-gradient-to-br ${styles.from} to-transparent ${styles.border} overflow-hidden group`}
-      style={{ boxShadow: `0 4px 20px ${styles.glow}` }}
+      className={`relative p-5 rounded-lg clay-card overflow-hidden group`}
     >
       {/* Soft glow blob */}
       <div

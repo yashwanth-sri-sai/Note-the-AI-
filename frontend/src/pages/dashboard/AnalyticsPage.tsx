@@ -189,7 +189,7 @@ export const AnalyticsPage: React.FC = () => {
                 100
               );
               return (
-                <div className="mb-6 p-5 rounded-2xl bg-black/5 dark:bg-white/5 border border-border/10 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.05)]">
+                <div className="mb-6 p-5 rounded-lg clay-card">
                   <div className="flex justify-between items-center mb-5">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/95">
                       Visual Latency Distribution (ms)
@@ -390,7 +390,7 @@ export const AnalyticsPage: React.FC = () => {
           </div>
 
           {/* Endpoint Usage Distribution */}
-          <div className="clay-panel p-5 bg-card/45">
+          <div className="clay-card rounded-lg p-5 bg-card/45">
             <h3 className="font-bold text-xs uppercase text-muted-foreground/80 tracking-wider mb-4">
               Endpoint Distribution
             </h3>
@@ -442,10 +442,10 @@ export const AnalyticsPage: React.FC = () => {
                     key={err.id} 
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
-                    className="p-3 rounded-2xl border border-rose-500/10 bg-rose-500/[0.03] dark:bg-rose-500/[0.02] text-left space-y-1.5 shadow-[inset_-1px_-1px_3px_rgba(0,0,0,0.02),_inset_1px_1px_3px_rgba(255,255,255,0.05)]"
+                    className="p-3 rounded-btn border border-rose-500/10 bg-rose-500/[0.03] dark:bg-rose-500/[0.02] text-left space-y-1.5 shadow-[inset_-1px_-1px_3px_rgba(0,0,0,0.02),_inset_1px_1px_3px_rgba(255,255,255,0.05)]"
                   >
                     <div className="flex justify-between items-center">
-                      <span className="font-bold uppercase text-[9px] bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded">
+                      <span className="font-bold uppercase text-[9px] bg-red-500/10 text-red-500 border border-red-500/20 px-1.5 py-0.5 rounded-btn">
                         HTTP {err.status_code}
                       </span>
                       <span className="text-[9px] text-muted-foreground">
