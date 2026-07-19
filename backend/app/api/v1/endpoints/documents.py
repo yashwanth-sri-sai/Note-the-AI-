@@ -69,12 +69,26 @@ async def run_document_ingestion_pipeline(
                     job.error_message = error_msg
                 if status_str == "UPLOADING":
                     job.processing_started_at = datetime.utcnow()
-                elif status_str in ["READY", "FAILED", "COMPLETED"]:
+                elif status_str in ["FAILED", "COMPLETED"]:
                     job.processing_completed_at = datetime.utcnow()
             if doc:
                 if status_str not in ["SUMMARY_GENERATION", "FLASHCARD_GENERATION", "QUIZ_GENERATION"]:
                     doc.status = status_str
             await db.commit()
+
+            # Step 2: Reload and Log
+            if doc:
+                try:
+                    await db.refresh(doc)
+                    logger.info(
+                        f"STATUS UPDATED\n"
+                        f"document={doc.id}\n"
+                        f"status={doc.status}\n"
+                        f"processing_stage={status_str.lower()}\n"
+                        f"updated_at={doc.updated_at}"
+                    )
+                except Exception as refresh_err:
+                    logger.warning(f"Failed to refresh doc for status logging: {refresh_err}")
 
             # Record document processing status in Prometheus metrics
             from app.core.metrics import metrics_store
@@ -86,26 +100,32 @@ async def run_document_ingestion_pipeline(
             async with db_session_factory() as db:
                 await _update(db)
 
-    # 1. Initialize UPLOADING state
-    logger.info(f"[PIPELINE] UPLOAD_STARTED — doc={document_id}")
-    try:
-        await update_status("UPLOADING")
-        logger.info(f"[PIPELINE] UPLOAD_FINISHED — doc={document_id}")
-    except Exception as e:
-        logger.error(f"[PIPELINE] Failed to initialize UPLOADING status: {e}")
+    logger.info("[PIPELINE] STARTED")
 
-    # Load file bytes from storage if they were not passed (e.g. during startup recovery)
-    _workspace_id = workspace_id
-    _user_id = user_id
-    if not file_bytes:
-        logger.info(f"Loading file bytes from storage for document {document_id}")
-        try:
+    pipeline_completed = False
+    error_msg = None
+
+    try:
+        # Load doc and confirm it exists in DB
+        async with db_session_factory() as db:
+            doc = await db.get(Document, document_id)
+            if not doc:
+                raise ValueError("Document not found in database.")
+            logger.info(f"[PIPELINE] DOCUMENT_LOADED — doc={document_id}")
+
+        # 1. Initialize UPLOADING state
+        await update_status("UPLOADING")
+        logger.info(f"[PIPELINE] STATUS_UPLOADING — doc={document_id}")
+
+        # Load file bytes from storage if they were not passed (e.g. during startup recovery)
+        _workspace_id = workspace_id
+        _user_id = user_id
+        if not file_bytes:
+            logger.info(f"Loading file bytes from storage for document {document_id}")
             async with db_session_factory() as db:
                 doc = await db.get(Document, document_id)
                 if not doc:
-                    logger.error(f"Document {document_id} not found in database. Aborting recovery.")
-                    await update_status("FAILED", error_msg="Document not found in database.")
-                    return
+                    raise ValueError("Document not found in database during retrieval.")
                 _workspace_id = _workspace_id or doc.workspace_id
                 _user_id = _user_id or doc.created_by
                 storage_path = doc.storage_path
@@ -114,21 +134,15 @@ async def run_document_ingestion_pipeline(
             storage_service = StorageService()
             file_bytes = await storage_service.get_file_bytes(storage_path)
             logger.info(f"Successfully loaded {len(file_bytes)} bytes from storage.")
-        except Exception as e:
-            logger.error(f"Failed to load file bytes from storage: {e}")
-            await update_status("FAILED", error_msg=f"Storage retrieval error: {str(e)}")
-            return
 
-    max_retries = 3
-    retry_delay = 2.0
-    
-    extracted_text = ""
-    flat_chunks = []
-    embedding_latency_ms = 0.0
-    pipeline_start = _time.perf_counter()
-    pipeline_completed = False
+        max_retries = 3
+        retry_delay = 2.0
+        
+        extracted_text = ""
+        flat_chunks = []
+        embedding_latency_ms = 0.0
+        pipeline_start = _time.perf_counter()
 
-    try:
         for attempt in range(max_retries + 1):
             try:
                 async with db_session_factory() as db:
@@ -214,6 +228,7 @@ async def run_document_ingestion_pipeline(
                     if not existing_chunks:
                         # Chunks don't exist, generate and save them
                         logger.info(f"[PIPELINE] Generating batch embeddings for {len(flat_chunks)} chunks...")
+                        logger.info(f"[PIPELINE] VECTOR_INSERT_STARTED — doc={document_id}")
                         embedding_provider = get_embedding_provider()
                         texts_to_embed = [c["text"] for c in flat_chunks]
                         embedding_start = _time.perf_counter()
@@ -255,6 +270,7 @@ async def run_document_ingestion_pipeline(
                             f"chunks={len(flat_chunks)}, "
                             f"total_embed_elapsed={(_time.perf_counter()-_t_embed)*1000:.1f}ms"
                         )
+                        logger.info(f"[PIPELINE] VECTOR_INSERT_FINISHED — doc={document_id}")
                     else:
                         logger.info("[PIPELINE] Chunks and embeddings already exist. Skipping creation.")
 
@@ -296,8 +312,6 @@ async def run_document_ingestion_pipeline(
                     db.add(note)
                     await db.commit()
 
-        # Update Document and Job Status to READY (Non-blocking for optional AI tasks)
-        await update_status("READY")
         document_processing_ms = (_time.perf_counter() - pipeline_start) * 1000.0
         asyncio.create_task(log_latency_metric(
             workspace_id=_workspace_id,
@@ -310,96 +324,106 @@ async def run_document_ingestion_pipeline(
             f"total_elapsed={document_processing_ms:.1f}ms, "
             f"embed_ms={embedding_latency_ms:.1f}ms"
         )
+
+        # ── Optional AI Tasks (Non-blocking) ──────────────────────────────────────────
+
+        # Step D.5: Summary Generation (Optional, resilient)
+        try:
+            logger.info(f"[PIPELINE] SUMMARY_STARTED — doc={document_id}")
+            await update_status("SUMMARY_GENERATION")
+            logger.info(f"[PIPELINE] SUMMARY_FINISHED — doc={document_id}")
+        except Exception as e:
+            logger.error(f"[PIPELINE] SUMMARY_FAILED — doc={document_id}: {e}")
+
+        # Step D: Flashcard Generation (Resilient, try-except, idempotent)
+        try:
+            logger.info(f"[PIPELINE] FLASHCARDS_STARTED — doc={document_id}")
+            _t_fc = _time.perf_counter()
+            await update_status("FLASHCARD_GENERATION")
+            async with db_session_factory() as db:
+                # Check if flashcards already exist (Idempotency)
+                fc_stmt = select(Flashcard).where(Flashcard.note_id == document_id)
+                fc_res = await db.execute(fc_stmt)
+                existing_fcs = fc_res.scalars().all()
+                if not existing_fcs:
+                    ai_service = AIService(db)
+                    await ai_service.generate_note_flashcards(document_id, _workspace_id)
+                    logger.info(
+                        f"[PIPELINE] FLASHCARDS_FINISHED — doc={document_id}, "
+                        f"elapsed={(_time.perf_counter()-_t_fc)*1000:.1f}ms"
+                    )
+                else:
+                    logger.info("[PIPELINE] Flashcards already exist. Skipping generation.")
+        except Exception as e:
+            logger.error(f"[PIPELINE] FLASHCARDS_FAILED — doc={document_id}: {e}")
+            logger.error(traceback.format_exc())
+            async with db_session_factory() as db:
+                job = await db.get(ProcessingJob, job_id)
+                if job:
+                    job.error_message = f"Flashcard Gen Error: {str(e)}"
+                    await db.commit()
+
+        # Step E: Quiz Generation (Resilient, try-except, idempotent)
+        try:
+            logger.info(f"[PIPELINE] QUIZ_STARTED — doc={document_id}")
+            _t_qz = _time.perf_counter()
+            await update_status("QUIZ_GENERATION")
+            async with db_session_factory() as db:
+                # Check if quizzes already exist (Idempotency)
+                qz_stmt = select(Quiz).where(Quiz.note_id == document_id)
+                qz_res = await db.execute(qz_stmt)
+                existing_qzs = qz_res.scalars().all()
+                if not existing_qzs:
+                    ai_service = AIService(db)
+                    await ai_service.generate_note_quiz(document_id, _workspace_id)
+                    logger.info(
+                        f"[PIPELINE] QUIZ_FINISHED — doc={document_id}, "
+                        f"elapsed={(_time.perf_counter()-_t_qz)*1000:.1f}ms"
+                    )
+                else:
+                    logger.info("[PIPELINE] Quizzes already exist. Skipping generation.")
+        except Exception as e:
+            logger.error(f"[PIPELINE] QUIZ_FAILED — doc={document_id}: {e}")
+            logger.error(traceback.format_exc())
+            async with db_session_factory() as db:
+                job = await db.get(ProcessingJob, job_id)
+                if job:
+                    job.error_message = f"Quiz Gen Error: {str(e)}"
+                    await db.commit()
+
         pipeline_completed = True
 
     except Exception as e:
-        # Guarantee FAILED state
         logger.error(
             f"[PIPELINE] DOCUMENT_FAILED — doc={document_id}, "
             f"reason={str(e)[:200]}"
         )
-        await update_status("FAILED", error_msg=str(e))
+        logger.error(traceback.format_exc())
+        error_msg = str(e)
         # Update Note content to indicate failure
-        async with db_session_factory() as db:
-            note = await db.get(Note, document_id)
-            if note:
-                note.content = f"Failed to process document: {str(e)}"
-                db.add(note)
-                await db.commit()
-        return  # Abort ingestion pipeline
+        try:
+            async with db_session_factory() as db:
+                note = await db.get(Note, document_id)
+                if note:
+                    note.content = f"Failed to process document: {str(e)}"
+                    db.add(note)
+                    await db.commit()
+        except Exception as note_err:
+            logger.error(f"Failed to update note content to failed status: {note_err}")
 
-    # ── Optional AI Tasks (Non-blocking) ──────────────────────────────────────────
+    finally:
+        # Guarantee COMPLETED or FAILED terminal state
+        final_status = "COMPLETED" if pipeline_completed else "FAILED"
+        logger.info(f"[PIPELINE] STATUS_{final_status}")
+        
+        # Shield this database write to ensure it isn't cancelled during application shutdown
+        try:
+            await asyncio.shield(update_status(final_status, error_msg=error_msg))
+            logger.info("[PIPELINE] DB_COMMIT")
+        except Exception as status_err:
+            logger.error(f"Failed to write final terminal status to DB: {status_err}")
 
-    # Step D.5: Summary Generation (Optional, resilient)
-    try:
-        logger.info(f"[PIPELINE] SUMMARY_GENERATION_STARTED — doc={document_id}")
-        await update_status("SUMMARY_GENERATION")
-        # Placeholder for summary generation logic since there's no DB model for it, but log start and finish
-        logger.info(f"[PIPELINE] SUMMARY_GENERATION_FINISHED — doc={document_id}")
-    except Exception as e:
-        logger.error(f"[PIPELINE] SUMMARY_GENERATION_FAILED — doc={document_id}: {e}")
-
-    # Step D: Flashcard Generation (Resilient, try-except, idempotent)
-    try:
-        logger.info(f"[PIPELINE] FLASHCARDS_STARTED — doc={document_id}")
-        _t_fc = _time.perf_counter()
-        await update_status("FLASHCARD_GENERATION")
-        async with db_session_factory() as db:
-            # Check if flashcards already exist (Idempotency)
-            fc_stmt = select(Flashcard).where(Flashcard.note_id == document_id)
-            fc_res = await db.execute(fc_stmt)
-            existing_fcs = fc_res.scalars().all()
-            if not existing_fcs:
-                ai_service = AIService(db)
-                await ai_service.generate_note_flashcards(document_id, _workspace_id)
-                logger.info(
-                    f"[PIPELINE] FLASHCARDS_FINISHED — doc={document_id}, "
-                    f"elapsed={(_time.perf_counter()-_t_fc)*1000:.1f}ms"
-                )
-            else:
-                logger.info("[PIPELINE] Flashcards already exist. Skipping generation.")
-    except Exception as e:
-        logger.error(f"[PIPELINE] FLASHCARDS_FAILED — doc={document_id}: {e}")
-        logger.error(traceback.format_exc())
-        async with db_session_factory() as db:
-            job = await db.get(ProcessingJob, job_id)
-            if job:
-                job.error_message = f"Flashcard Gen Error: {str(e)}"
-                await db.commit()
-
-    # Step E: Quiz Generation (Resilient, try-except, idempotent)
-    try:
-        logger.info(f"[PIPELINE] QUIZZES_STARTED — doc={document_id}")
-        _t_qz = _time.perf_counter()
-        await update_status("QUIZ_GENERATION")
-        async with db_session_factory() as db:
-            # Check if quizzes already exist (Idempotency)
-            qz_stmt = select(Quiz).where(Quiz.note_id == document_id)
-            qz_res = await db.execute(qz_stmt)
-            existing_qzs = qz_res.scalars().all()
-            if not existing_qzs:
-                ai_service = AIService(db)
-                await ai_service.generate_note_quiz(document_id, _workspace_id)
-                logger.info(
-                    f"[PIPELINE] QUIZZES_FINISHED — doc={document_id}, "
-                    f"elapsed={(_time.perf_counter()-_t_qz)*1000:.1f}ms"
-                )
-            else:
-                logger.info("[PIPELINE] Quizzes already exist. Skipping generation.")
-    except Exception as e:
-        logger.error(f"[PIPELINE] QUIZZES_FAILED — doc={document_id}: {e}")
-        logger.error(traceback.format_exc())
-        async with db_session_factory() as db:
-            job = await db.get(ProcessingJob, job_id)
-            if job:
-                job.error_message = f"Quiz Gen Error: {str(e)}"
-                await db.commit()
-
-    # Finally set the job status back to READY (to indicate that optional tasks have completed)
-    try:
-        await update_status("READY")
-    except Exception as e:
-        logger.error(f"[PIPELINE] Failed to finalize status to READY: {e}")
+        logger.info("[PIPELINE] FINISHED")
 
 
 
@@ -451,7 +475,7 @@ async def run_document_reindex_pipeline(
                     )
                     db.add(new_emb)
                     
-            doc.status = "READY"
+            doc.status = "COMPLETED"
             await db.commit()
         except Exception as e:
             await db.rollback()
@@ -486,6 +510,7 @@ async def upload_document(
     client_ip = request.client.host if request.client else None
     
     logger.info(f"Upload request received from {client_ip} for user {current_user.id}")
+    logger.info("[UPLOAD] REQUEST_RECEIVED")
     
     try:
         # 1. Basic validation
@@ -527,15 +552,19 @@ async def upload_document(
                     detail=f"Invalid file content detected. Uploaded file signature ({detected_mime}) does not match extension."
                 )
         logger.info(f"MIME validation passed: {detected_mime}")
+        logger.info("[UPLOAD] FILE_VALIDATED")
 
         # 2. Store in storage bucket/local
         logger.info("Initiating storage upload...")
+        logger.info("[UPLOAD] STORAGE_UPLOAD_STARTED")
         storage_service = StorageService()
         storage_path = await storage_service.upload_file(file_bytes, fn)
         logger.info(f"Storage upload successful. Path: {storage_path}")
+        logger.info("[UPLOAD] STORAGE_UPLOAD_FINISHED")
 
         # 3. Create Document entry
         logger.info("Saving document to database...")
+        logger.info("[UPLOAD] DATABASE_INSERT_STARTED")
         doc = Document(
             workspace_id=workspace_id,
             filename=fn,
@@ -570,6 +599,7 @@ async def upload_document(
         # Commit initial state to release DB locks before background task runs
         await db.commit()
         logger.info(f"Database save successful. Document ID: {doc.id}")
+        logger.info("[UPLOAD] DATABASE_INSERT_FINISHED")
 
         # 5. Enqueue background ingestion pipeline task
         from app.db.session import async_session_factory
@@ -587,6 +617,7 @@ async def upload_document(
             current_user.id,
             corr_id,
         )
+        logger.info("[UPLOAD] BACKGROUND_TASK_REGISTERED")
 
 
         total_response_ms = (time.perf_counter() - start_time) * 1000.0

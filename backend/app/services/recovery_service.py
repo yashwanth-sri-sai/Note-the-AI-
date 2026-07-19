@@ -21,6 +21,7 @@ async def stuck_job_recovery_task() -> None:
     
     logger.info("Startup recovery: Scanning for unfinished processing jobs...")
     
+    jobs_to_recover = []
     async with async_session_factory() as db:
         try:
             # Select all jobs that are not in a terminal state
@@ -35,7 +36,7 @@ async def stuck_job_recovery_task() -> None:
                 return
             
             count = len(unfinished_jobs)
-            logger.warning(f"Startup recovery: Found {count} unfinished job(s). Resuming execution...")
+            logger.warning(f"Startup recovery: Found {count} unfinished job(s). Preparing to resume...")
             
             for job in unfinished_jobs:
                 # Fetch matching document
@@ -46,25 +47,38 @@ async def stuck_job_recovery_task() -> None:
                     job.error_message = "Document not found during recovery."
                     continue
                 
-                logger.info(f"Startup recovery: Re-enqueuing job {job.id} for document {doc.id} ({doc.filename})")
-                
-                # Spawn background task to process the document
-                asyncio.create_task(
-                    run_document_ingestion_pipeline(
-                        document_id=doc.id,
-                        job_id=job.id,
-                        file_bytes=None,
-                        filename=doc.filename,
-                        content_type=doc.content_type,
-                        db_session_factory=async_session_factory,
-                        workspace_id=doc.workspace_id,
-                        user_id=doc.created_by,
-                    )
-                )
+                # Capture metadata for spawn
+                jobs_to_recover.append({
+                    "document_id": doc.id,
+                    "job_id": job.id,
+                    "filename": doc.filename,
+                    "content_type": doc.content_type,
+                    "workspace_id": doc.workspace_id,
+                    "created_by": doc.created_by
+                })
             
             await db.commit()
-            logger.info("Startup recovery: Recovery task completed successfully.")
+            logger.info("Startup recovery: Recovery query session committed and closed.")
             
         except Exception as e:
             await db.rollback()
-            logger.error(f"Startup recovery: Recovery task failed: {e}")
+            logger.error(f"Startup recovery: Scanning/Commit phase failed: {e}")
+            return
+
+    # Safely spawn recovery tasks outside of the active DB session block to prevent deadlocks
+    for task_data in jobs_to_recover:
+        logger.info(f"Startup recovery: Re-enqueuing job {task_data['job_id']} for document {task_data['document_id']} ({task_data['filename']})")
+        
+        asyncio.create_task(
+            run_document_ingestion_pipeline(
+                document_id=task_data["document_id"],
+                job_id=task_data["job_id"],
+                file_bytes=None,
+                filename=task_data["filename"],
+                content_type=task_data["content_type"],
+                db_session_factory=async_session_factory,
+                workspace_id=task_data["workspace_id"],
+                user_id=task_data["created_by"],
+            )
+        )
+    logger.info(f"Startup recovery: Successfully spawned {len(jobs_to_recover)} recovery tasks.")

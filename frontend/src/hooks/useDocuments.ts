@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api-client";
 import { useAuthStore } from "@/store/auth-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
+import { isDocumentProcessing } from "@/lib/document-status";
 
 export interface DocumentItem {
   id: string;
@@ -43,28 +44,8 @@ export const useDocuments = () => {
         return false;
       }
 
-      let minInterval: number | null = null;
-
-      for (const doc of data) {
-        const s = doc.status.toUpperCase();
-        
-        // Skip terminal/stopped states
-        if (
-          s === "READY" ||
-          s === "COMPLETED" || 
-          s === "FAILED"
-        ) {
-          continue;
-        }
-
-        let interval = 2500; // standard active polling interval
-
-        if (minInterval === null || interval < minInterval) {
-          minInterval = interval;
-        }
-      }
-
-      return minInterval !== null ? minInterval : false;
+      const hasActive = data.some((doc) => isDocumentProcessing(doc.status));
+      return hasActive ? 2000 : false;
     },
 
     // ── Cache tunables ────────────────────────────────────────────────────────

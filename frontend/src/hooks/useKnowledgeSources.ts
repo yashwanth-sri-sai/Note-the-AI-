@@ -3,6 +3,7 @@ import { apiClient } from "@/lib/api-client";
 import { KnowledgeSource } from "@/types";
 import { useAuthStore } from "@/store/auth-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
+import { isDocumentProcessing } from "@/lib/document-status";
 
 export const useKnowledgeSources = (
   options: { includeProcessing?: boolean } = {}
@@ -33,26 +34,10 @@ export const useKnowledgeSources = (
       if (
         data &&
         data.some(
-          (source) => {
-            if (source.source_type !== "document") return false;
-            // Normalize to uppercase to handle both legacy lowercase ("pending",
-            // "processing") and current pipeline uppercase ("UPLOADED",
-            // "TEXT_EXTRACTED", "CHUNKED", "EMBEDDED", "FLASHCARDS_READY", "QUIZZES_READY").
-            const s = source.status.toUpperCase();
-            return (
-              s === "UPLOADED" ||
-              s === "PENDING" ||
-              s === "PROCESSING" ||
-              s === "TEXT_EXTRACTED" ||
-              s === "CHUNKED" ||
-              s === "EMBEDDED" ||
-              s === "FLASHCARDS_READY" ||
-              s === "QUIZZES_READY"
-            );
-          }
+          (source) => source.source_type === "document" && isDocumentProcessing(source.status)
         )
       ) {
-        return 3000;
+        return 2000;
       }
       return false;
     },
