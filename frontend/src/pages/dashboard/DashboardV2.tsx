@@ -36,8 +36,8 @@ import { WorkspacePanelToggle } from "@/components/workspace/WorkspacePanelToggl
 
 // ── BRAND SECTION ──
 const BrandSection: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
-  <div className={`flex items-center px-6 py-5 shrink-0 select-none text-left ${collapsed ? "justify-center" : "gap-3.5"}`}>
-    <Logo size={42} className="hover:scale-[1.03] transition-all duration-250 ease-in-out shrink-0" />
+  <div className={`flex items-center shrink-0 select-none text-left h-14 border-b border-[#111827]/5 dark:border-white/[0.05] ${collapsed ? "justify-center px-0" : "px-6 gap-3.5"}`}>
+    <Logo size={collapsed ? 36 : 42} className="hover:scale-[1.03] transition-all duration-250 ease-in-out shrink-0" />
     {!collapsed && (
       <div className="flex flex-col min-w-0">
         <span className="font-bold text-[18px] tracking-tight text-foreground leading-none">
@@ -60,12 +60,19 @@ const WorkspaceCard: React.FC<{
   chatCount: number;
   onClick: () => void;
 }> = ({ collapsed, activeWorkspaceName, docCount, noteCount, chatCount, onClick }) => (
-  <div className="px-6 py-2 select-none shrink-0">
+  <div className={`select-none shrink-0 ${collapsed ? "px-3.5 py-2 flex justify-center" : "px-6 py-2"}`}>
     <button
       onClick={onClick}
-      className={`w-full flex flex-col p-4.5 rounded-dialog border border-border bg-[#111827] dark:bg-[#111827] text-white hover:bg-[#162338] transition-all duration-200 text-left group shadow-lg hover:-translate-y-[2px] ${collapsed ? "items-center !p-3" : ""}`}
+      className={`
+        flex flex-col rounded-dialog border transition-all duration-200 text-left group shadow-lg hover:-translate-y-[2px]
+        ${
+          collapsed
+            ? "h-12 w-12 items-center justify-center p-0 border-[#111827]/5 dark:border-white/[0.05] bg-[#111827] dark:bg-[#111827] text-white hover:bg-[#162338]"
+            : "w-full p-4.5 border-border bg-[#111827] dark:bg-[#111827] text-white hover:bg-[#162338]"
+        }
+      `}
     >
-      <div className="flex items-center gap-3 w-full min-w-0">
+      <div className={`flex items-center min-w-0 ${collapsed ? "justify-center" : "gap-3 w-full"}`}>
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-primary/20 text-primary border border-primary/30 shadow-inner">
           <span className="font-bold text-xs uppercase">{activeWorkspaceName.slice(0, 2)}</span>
         </div>
@@ -109,7 +116,8 @@ const WorkspaceDropdown: React.FC<{
   activeWorkspaceId: string | null;
   onSelectWorkspace: (id: string) => void;
   onCreateWorkspace: (name: string) => void;
-}> = ({ isOpen, onClose, workspaces, activeWorkspaceId, onSelectWorkspace, onCreateWorkspace }) => {
+  collapsed: boolean;
+}> = ({ isOpen, onClose, workspaces, activeWorkspaceId, onSelectWorkspace, onCreateWorkspace, collapsed }) => {
   const [showCreate, setShowCreate] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -140,7 +148,9 @@ const WorkspaceDropdown: React.FC<{
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute top-[135px] left-6 right-6 p-2.5 z-50 rounded-dialog border border-white/[0.05] dark:border-white/[0.05] bg-card shadow-2xl space-y-1.5 text-left"
+            className={`absolute z-50 rounded-dialog border border-white/[0.05] dark:border-white/[0.05] bg-card shadow-2xl p-2.5 text-left ${
+              collapsed ? "top-[100px] left-12 w-56" : "top-[135px] left-6 right-6"
+            }`}
           >
             <div className="px-2 py-1 text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider">
               Switch Workspace
@@ -219,13 +229,13 @@ const NavigationGroup: React.FC<{
   collapsed: boolean;
   children: React.ReactNode;
 }> = ({ title, collapsed, children }) => (
-  <div className="space-y-1.5 text-left">
+  <div className={`text-left ${collapsed ? "space-y-2 pt-2" : "space-y-1.5 pt-0.5"}`}>
     {!collapsed && (
       <div className="px-6 text-[11px] uppercase font-bold text-muted-foreground/60 tracking-wider select-none mt-4.5 mb-1.5">
         {title}
       </div>
     )}
-    <div className="px-3.5 space-y-1">
+    <div className={`flex flex-col space-y-2 ${collapsed ? "items-center px-0" : "px-3.5"}`}>
       {children}
     </div>
   </div>
@@ -244,24 +254,25 @@ const NavigationItem: React.FC<{
     onClick={onClick}
     title={collapsed ? label : undefined}
     className={`
-      relative flex items-center justify-between w-full h-[48px] px-3.5 rounded-btn transition-all duration-200 group select-none
+      relative flex items-center rounded-btn select-none transition-all duration-200 ease-out group
+      ${collapsed ? "h-12 w-12 justify-center p-0" : "w-full h-[48px] px-3.5 justify-between"}
       ${
         isActive
-          ? "text-white bg-gradient-to-r from-primary/20 to-violet/10 border border-primary/20 shadow-sm"
-          : "text-secondary-text hover:text-foreground hover:bg-muted/10 hover:translate-x-[4px]"
+          ? "text-white bg-gradient-to-r from-[#3B82F6]/16 to-[#22D3EE]/08 dark:from-[#3B82F6]/16 dark:to-[#22D3EE]/08 border border-[#3B82F6]/20 shadow-[0_0_15px_rgba(59,130,246,0.1)]"
+          : "text-secondary-text hover:text-foreground hover:bg-[#3B82F6]/08 hover:shadow-[0_0_12px_rgba(59,130,246,0.06)] hover:-translate-y-[1px] hover:scale-[1.04]"
       }
     `}
   >
     {isActive && (
-      <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-primary shadow-[0_0_12px_rgba(37,99,235,0.7)]" />
+      <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-[#3B82F6] shadow-[0_0_12px_rgba(59,130,246,0.75)]" />
     )}
-    <div className="flex items-center gap-3.5 min-w-0">
+    <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3.5"}`}>
       <Icon className={`
-        h-[18px] w-[18px] shrink-0 transition-all duration-200
+        h-5 w-5 shrink-0 transition-all duration-200
         ${
           isActive 
-            ? "text-primary drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]" 
-            : `text-muted-foreground/80 group-hover:text-foreground group-hover:drop-shadow-[0_0_8px_rgba(37,99,235,0.2)] ${color || ""}`
+            ? "text-[#3B82F6] drop-shadow-[0_0_8px_rgba(59,130,246,0.8)]" 
+            : `text-muted-foreground/80 group-hover:text-foreground group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.25)] ${color || ""}`
         }
       `} />
       {!collapsed && (
@@ -284,10 +295,13 @@ const FolderAccordionItem: React.FC<{
   <button
     onClick={onClick}
     title={collapsed ? label : undefined}
-    className="flex items-center justify-between w-full h-[48px] px-3.5 rounded-btn text-secondary-text hover:text-foreground hover:bg-muted/10 hover:translate-x-[4px] transition-all duration-200 group select-none"
+    className={`
+      flex items-center rounded-btn text-secondary-text hover:text-foreground hover:bg-[#3B82F6]/08 hover:shadow-[0_0_12px_rgba(59,130,246,0.06)] hover:-translate-y-[1px] hover:scale-[1.04] transition-all duration-200 group select-none
+      ${collapsed ? "h-12 w-12 justify-center p-0" : "w-full h-[48px] px-3.5 justify-between"}
+    `}
   >
-    <div className="flex items-center gap-3.5 min-w-0">
-      <Icon className="h-[18px] w-[18px] shrink-0 text-muted-foreground/80 group-hover:text-foreground group-hover:drop-shadow-[0_0_8px_rgba(37,99,235,0.2)]" />
+    <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3.5"}`}>
+      <Icon className="h-5 w-5 shrink-0 text-muted-foreground/80 group-hover:text-foreground group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.25)]" />
       {!collapsed && (
         <span className="text-[14px] font-semibold tracking-wide">
           {label}
@@ -313,12 +327,19 @@ const UserProfileCard: React.FC<{
   onLogout: () => void;
   onSettings: () => void;
 }> = ({ collapsed, user, showDropdown, onToggleDropdown, onLogout, onSettings }) => (
-  <div className="relative px-6 py-4 border-t border-white/[0.05] dark:border-white/[0.05] shrink-0">
+  <div className={`relative border-t border-white/[0.05] dark:border-white/[0.05] shrink-0 ${collapsed ? "px-3.5 py-5 flex justify-center" : "px-6 py-4"}`}>
     <button
       onClick={onToggleDropdown}
-      className={`w-full flex items-center justify-between gap-3 p-3 rounded-dialog border border-[#111827] dark:border-white/[0.05] bg-card hover:bg-muted/10 transition-all duration-200 text-left shadow-sm group hover:scale-[1.01] ${collapsed ? "justify-center !p-2" : ""}`}
+      className={`
+        flex items-center justify-between rounded-dialog border transition-all duration-200 text-left shadow-sm group hover:scale-[1.01]
+        ${
+          collapsed
+            ? "h-12 w-12 justify-center p-0 border-[#111827]/5 dark:border-white/[0.05] bg-card hover:bg-muted/10"
+            : "w-full p-3 border-[#111827] dark:border-white/[0.05] bg-card hover:bg-muted/10"
+        }
+      `}
     >
-      <div className="flex items-center gap-3 min-w-0">
+      <div className={`flex items-center ${collapsed ? "justify-center" : "gap-3 min-w-0"}`}>
         <div className="h-8.5 w-8.5 rounded-full overflow-hidden border border-white/[0.08] flex items-center justify-center bg-secondary shrink-0 shadow-sm">
           {user?.avatar_url ? (
             <img
@@ -360,7 +381,7 @@ const UserProfileCard: React.FC<{
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute bottom-full left-6 right-6 mb-3 p-1.5 z-50 rounded-dialog border border-white/[0.05] dark:border-white/[0.05] bg-card shadow-2xl space-y-1"
+            className={`absolute bottom-full mb-3 p-1.5 z-50 rounded-dialog border border-white/[0.05] dark:border-[#111827] bg-card shadow-2xl space-y-1 ${collapsed ? "left-12 w-56" : "left-6 right-6"}`}
           >
             <div className="px-3 py-2 text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider select-none border-b border-white/[0.03] mb-1">
               Account Settings
@@ -700,8 +721,8 @@ export const DashboardV2: React.FC = () => {
     const activeWorkspaceName = activeWorkspace ? activeWorkspace.name : "Personal Workspace";
 
     return (
-      <div className="flex flex-col justify-between h-full bg-[#FAFCFF] dark:bg-[#0A0F1C] border-r border-[#111827]/5 dark:border-white/[0.05] relative">
-        <div className="flex flex-col overflow-y-auto max-h-[calc(100vh-6rem)] flex-grow scrollbar pb-4">
+      <div className="flex flex-col justify-between h-full bg-[#FAFCFF] dark:bg-[#0A1020] border-r border-[#111827]/5 dark:border-white/[0.05] relative">
+        <div className="flex flex-col overflow-y-auto max-h-[calc(100vh-6rem)] flex-grow scrollbar-premium pb-4">
           {/* Logo Brand */}
           <BrandSection collapsed={collapsed} />
 
@@ -722,6 +743,7 @@ export const DashboardV2: React.FC = () => {
             activeWorkspaceId={activeWorkspaceId}
             onSelectWorkspace={setActiveWorkspaceId}
             onCreateWorkspace={createWorkspace}
+            collapsed={collapsed}
           />
 
           {/* Nav Items Grouped */}
@@ -1042,7 +1064,7 @@ export const DashboardV2: React.FC = () => {
       {/* Desktop Sidebar Navigation */}
       {!isMobile && !isFocusMode && (
         <motion.aside
-          animate={{ width: sidebarCollapsed ? 72 : 280 }}
+          animate={{ width: sidebarCollapsed ? 76 : 280 }}
           transition={{ type: "spring", stiffness: 240, damping: 26 }}
           className="border-r border-white/[0.03] bg-sidebar flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-hidden z-30"
         >

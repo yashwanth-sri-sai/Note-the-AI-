@@ -317,15 +317,30 @@
 }
 .clay-card-sky:hover, .clay-card-cyan:hover { border-color: rgba(14, 165, 233, 0.35); }
 
-/* ─── SCROLLBAR ──────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: hsl(var(--muted-foreground) / 0.2);
-  border-radius: 9999px;
+/* ─── PREMIUM SCROLLBAR ──────────────────────────────────────────────────── */
+.scrollbar-premium::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--muted-foreground) / 0.4);
+.scrollbar-premium::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-premium::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+  transition: background 200ms ease;
+}
+.scrollbar-premium:hover::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.12);
+}
+.dark .scrollbar-premium:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+.scrollbar-premium::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.25) !important;
+}
+.dark .scrollbar-premium::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
 }
 
 /* ─── SIDEBAR LIGHT MODE ─────────────────────────────────────────────────── */
