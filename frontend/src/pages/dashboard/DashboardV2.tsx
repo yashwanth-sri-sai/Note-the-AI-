@@ -11,7 +11,7 @@ import { useChatConversations } from "@/hooks/useChatConversations";
 import {
   BrainCircuit, LayoutDashboard, FileText, Folder, Tag, Star, Settings, LogOut,
   Menu, Bell, Search, X, ChevronDown, Sun, Moon, Files, Layers, GraduationCap, BarChart3,
-  ChevronRight, Plus, Upload, ShieldCheck
+  ChevronRight, Plus, Upload, ShieldCheck, Check
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Logo } from "@/components/common/Logo";
@@ -28,11 +28,371 @@ import { FlashcardsPage } from "./FlashcardsPage";
 import { QuizzesPage } from "./QuizzesPage";
 import { AnalyticsPage } from "./AnalyticsPage";
 import { EvaluationDashboardV2 } from "./EvaluationDashboardV2";
-import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
+import { useWorkspaceStore } from "@/store/workspace-store";
 import { getNotePreview } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { AIAssistantPanel } from "@/components/workspace/AIAssistantPanel";
 import { WorkspacePanelToggle } from "@/components/workspace/WorkspacePanelToggle";
+
+// ── BRAND SECTION ──
+const BrandSection: React.FC<{ collapsed: boolean }> = ({ collapsed }) => (
+  <div className={`flex items-center px-6 py-5 shrink-0 select-none text-left ${collapsed ? "justify-center" : "gap-3.5"}`}>
+    <Logo size={42} className="hover:scale-[1.03] transition-all duration-250 ease-in-out shrink-0" />
+    {!collapsed && (
+      <div className="flex flex-col min-w-0">
+        <span className="font-bold text-[18px] tracking-tight text-foreground leading-none">
+          NoteAI
+        </span>
+        <span className="text-[12px] font-medium text-muted-foreground/60 mt-1 tracking-normal truncate">
+          AI Knowledge Workspace
+        </span>
+      </div>
+    )}
+  </div>
+);
+
+// ── WORKSPACE CARD ──
+const WorkspaceCard: React.FC<{
+  collapsed: boolean;
+  activeWorkspaceName: string;
+  docCount: number;
+  noteCount: number;
+  chatCount: number;
+  onClick: () => void;
+}> = ({ collapsed, activeWorkspaceName, docCount, noteCount, chatCount, onClick }) => (
+  <div className="px-6 py-2 select-none shrink-0">
+    <button
+      onClick={onClick}
+      className={`w-full flex flex-col p-4.5 rounded-dialog border border-border bg-[#111827] dark:bg-[#111827] text-white hover:bg-[#162338] transition-all duration-200 text-left group shadow-lg hover:-translate-y-[2px] ${collapsed ? "items-center !p-3" : ""}`}
+    >
+      <div className="flex items-center gap-3 w-full min-w-0">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-primary/20 text-primary border border-primary/30 shadow-inner">
+          <span className="font-bold text-xs uppercase">{activeWorkspaceName.slice(0, 2)}</span>
+        </div>
+        {!collapsed && (
+          <div className="min-w-0 flex flex-col flex-grow">
+            <span className="text-[10px] text-muted-foreground/60 uppercase font-extrabold tracking-wider leading-none">
+              Workspace
+            </span>
+            <span className="text-sm font-semibold text-white truncate mt-1">
+              {activeWorkspaceName}
+            </span>
+          </div>
+        )}
+      </div>
+      
+      {!collapsed && (
+        <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-white/[0.04] text-left text-[11px] font-medium text-muted-foreground">
+          <div className="flex flex-col">
+            <span className="text-white font-semibold">{docCount}</span>
+            <span className="text-[9px] text-muted-foreground/75 uppercase tracking-wide mt-0.5">Docs</span>
+          </div>
+          <div className="flex flex-col border-l border-white/[0.04] pl-2">
+            <span className="text-white font-semibold">{noteCount}</span>
+            <span className="text-[9px] text-muted-foreground/75 uppercase tracking-wide mt-0.5">Notes</span>
+          </div>
+          <div className="flex flex-col border-l border-white/[0.04] pl-2">
+            <span className="text-white font-semibold">{chatCount}</span>
+            <span className="text-[9px] text-muted-foreground/75 uppercase tracking-wide mt-0.5">Chats</span>
+          </div>
+        </div>
+      )}
+    </button>
+  </div>
+);
+
+// ── WORKSPACE SWITCHER DROPDOWN ──
+const WorkspaceDropdown: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  workspaces: any[];
+  activeWorkspaceId: string | null;
+  onSelectWorkspace: (id: string) => void;
+  onCreateWorkspace: (name: string) => void;
+}> = ({ isOpen, onClose, workspaces, activeWorkspaceId, onSelectWorkspace, onCreateWorkspace }) => {
+  const [showCreate, setShowCreate] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWorkspaceName.trim()) return;
+    setSubmitting(true);
+    try {
+      await onCreateWorkspace(newWorkspaceName);
+      setNewWorkspaceName("");
+      setShowCreate(false);
+      onClose();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={onClose} />
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-[135px] left-6 right-6 p-2.5 z-50 rounded-dialog border border-white/[0.05] dark:border-white/[0.05] bg-card shadow-2xl space-y-1.5 text-left"
+          >
+            <div className="px-2 py-1 text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider">
+              Switch Workspace
+            </div>
+            
+            <div className="max-h-48 overflow-y-auto py-1 space-y-0.5 scrollbar">
+              {workspaces.map((w) => {
+                const isSelected = w.id === activeWorkspaceId;
+                return (
+                  <button
+                    key={w.id}
+                    onClick={() => {
+                      onSelectWorkspace(w.id);
+                      onClose();
+                    }}
+                    className={`flex items-center justify-between w-full px-2.5 py-2 text-xs font-semibold rounded-btn transition-colors ${
+                      isSelected
+                        ? "bg-primary/10 text-primary font-bold"
+                        : "text-secondary-text hover:bg-muted/10 hover:text-foreground"
+                    }`}
+                  >
+                    <span className="truncate pr-2">{w.name}</span>
+                    {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="border-t border-white/[0.03] my-1" />
+            
+            {showCreate ? (
+              <form onSubmit={handleCreate} className="p-2 space-y-2">
+                <input
+                  type="text"
+                  placeholder="New workspace name..."
+                  value={newWorkspaceName}
+                  onChange={(e) => setNewWorkspaceName(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-btn bg-background border border-border focus:outline-none focus:border-primary text-foreground"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreate(false)}
+                    className="px-2.5 py-1 text-[10px] font-bold rounded-btn hover:bg-muted/10 text-muted-foreground"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="px-2.5 py-1 text-[10px] font-bold rounded-btn bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
+                  >
+                    {submitting ? "Creating..." : "Create"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                onClick={() => setShowCreate(true)}
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-[10px] font-bold rounded-btn border border-dashed border-border/80 hover:border-primary/50 text-muted-foreground hover:text-primary transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" /> Create Workspace
+              </button>
+            )}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+};
+
+// ── NAVIGATION GROUP ──
+const NavigationGroup: React.FC<{
+  title: string;
+  collapsed: boolean;
+  children: React.ReactNode;
+}> = ({ title, collapsed, children }) => (
+  <div className="space-y-1.5 text-left">
+    {!collapsed && (
+      <div className="px-6 text-[11px] uppercase font-bold text-muted-foreground/60 tracking-wider select-none mt-4.5 mb-1.5">
+        {title}
+      </div>
+    )}
+    <div className="px-3.5 space-y-1">
+      {children}
+    </div>
+  </div>
+);
+
+// ── NAVIGATION ITEM ──
+const NavigationItem: React.FC<{
+  label: string;
+  icon: any;
+  isActive: boolean;
+  collapsed: boolean;
+  onClick: () => void;
+  color?: string;
+}> = ({ label, icon: Icon, isActive, collapsed, onClick, color }) => (
+  <button
+    onClick={onClick}
+    title={collapsed ? label : undefined}
+    className={`
+      relative flex items-center justify-between w-full h-[48px] px-3.5 rounded-btn transition-all duration-200 group select-none
+      ${
+        isActive
+          ? "text-white bg-gradient-to-r from-primary/20 to-violet/10 border border-primary/20 shadow-sm"
+          : "text-secondary-text hover:text-foreground hover:bg-muted/10 hover:translate-x-[4px]"
+      }
+    `}
+  >
+    {isActive && (
+      <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r bg-primary shadow-[0_0_12px_rgba(37,99,235,0.7)]" />
+    )}
+    <div className="flex items-center gap-3.5 min-w-0">
+      <Icon className={`
+        h-[18px] w-[18px] shrink-0 transition-all duration-200
+        ${
+          isActive 
+            ? "text-primary drop-shadow-[0_0_8px_rgba(6,182,212,0.8)]" 
+            : `text-muted-foreground/80 group-hover:text-foreground group-hover:drop-shadow-[0_0_8px_rgba(37,99,235,0.2)] ${color || ""}`
+        }
+      `} />
+      {!collapsed && (
+        <span className={`text-[14px] font-semibold tracking-wide ${isActive ? "text-white font-bold" : "text-secondary-text"}`}>
+          {label}
+        </span>
+      )}
+    </div>
+  </button>
+);
+
+// ── FOLDER ACCORDION ITEM ──
+const FolderAccordionItem: React.FC<{
+  label: string;
+  icon: any;
+  collapsed: boolean;
+  isOpen: boolean;
+  onClick: () => void;
+}> = ({ label, icon: Icon, collapsed, isOpen, onClick }) => (
+  <button
+    onClick={onClick}
+    title={collapsed ? label : undefined}
+    className="flex items-center justify-between w-full h-[48px] px-3.5 rounded-btn text-secondary-text hover:text-foreground hover:bg-muted/10 hover:translate-x-[4px] transition-all duration-200 group select-none"
+  >
+    <div className="flex items-center gap-3.5 min-w-0">
+      <Icon className="h-[18px] w-[18px] shrink-0 text-muted-foreground/80 group-hover:text-foreground group-hover:drop-shadow-[0_0_8px_rgba(37,99,235,0.2)]" />
+      {!collapsed && (
+        <span className="text-[14px] font-semibold tracking-wide">
+          {label}
+        </span>
+      )}
+    </div>
+    {!collapsed && (
+      <ChevronDown
+        className={`h-3.5 w-3.5 transition-transform duration-200 text-muted-foreground/60 ${
+          isOpen ? "rotate-0" : "-rotate-90"
+        }`}
+      />
+    )}
+  </button>
+);
+
+// ── USER PROFILE CARD ──
+const UserProfileCard: React.FC<{
+  collapsed: boolean;
+  user: any;
+  showDropdown: boolean;
+  onToggleDropdown: () => void;
+  onLogout: () => void;
+  onSettings: () => void;
+}> = ({ collapsed, user, showDropdown, onToggleDropdown, onLogout, onSettings }) => (
+  <div className="relative px-6 py-4 border-t border-white/[0.05] dark:border-white/[0.05] shrink-0">
+    <button
+      onClick={onToggleDropdown}
+      className={`w-full flex items-center justify-between gap-3 p-3 rounded-dialog border border-[#111827] dark:border-white/[0.05] bg-card hover:bg-muted/10 transition-all duration-200 text-left shadow-sm group hover:scale-[1.01] ${collapsed ? "justify-center !p-2" : ""}`}
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="h-8.5 w-8.5 rounded-full overflow-hidden border border-white/[0.08] flex items-center justify-center bg-secondary shrink-0 shadow-sm">
+          {user?.avatar_url ? (
+            <img
+              src={
+                user.avatar_url.startsWith("http")
+                  ? user.avatar_url
+                  : `${import.meta.env.VITE_API_BASE_URL}${user.avatar_url}`
+              }
+              alt={user.name || "User avatar"}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="text-xs font-bold text-primary">
+              {user?.name?.slice(0, 2).toUpperCase() || "US"}
+            </span>
+          )}
+        </div>
+        {!collapsed && (
+          <div className="min-w-0 text-left flex flex-col">
+            <h4 className="font-semibold text-[13px] truncate text-foreground leading-tight">
+              {user?.name || "User"}
+            </h4>
+            <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+              Creator
+            </p>
+          </div>
+        )}
+      </div>
+      {!collapsed && <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60 group-hover:text-foreground shrink-0 transition-transform duration-200" />}
+    </button>
+
+    {/* User Actions Dropdown Menu */}
+    <AnimatePresence>
+      {showDropdown && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={onToggleDropdown} />
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+            transition={{ duration: 0.15 }}
+            className="absolute bottom-full left-6 right-6 mb-3 p-1.5 z-50 rounded-dialog border border-white/[0.05] dark:border-white/[0.05] bg-card shadow-2xl space-y-1"
+          >
+            <div className="px-3 py-2 text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider select-none border-b border-white/[0.03] mb-1">
+              Account Settings
+            </div>
+            <button
+              onClick={() => {
+                onSettings();
+                onToggleDropdown();
+              }}
+              className="w-full text-left px-3 py-2 text-xs font-semibold rounded-btn hover:bg-muted/10 transition-colors flex items-center gap-2.5 text-foreground/80 hover:text-foreground"
+            >
+              <Settings className="h-4 w-4 text-muted-foreground" /> Settings
+            </button>
+            
+            <div className="flex items-center justify-between px-3 py-2 border-t border-white/[0.03] mt-1 pt-2">
+              <span className="text-xs font-semibold text-muted-foreground">Dark Theme</span>
+              <ThemeToggle compact />
+            </div>
+
+            <div className="border-t border-white/[0.03] my-1" />
+            <button
+              onClick={onLogout}
+              className="w-full text-left px-3 py-2 text-xs font-semibold rounded-btn hover:bg-red-500/10 text-red-400 hover:text-red-500 transition-colors flex items-center gap-2.5"
+            >
+              <LogOut className="h-4 w-4" /> Log Out
+            </button>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  </div>
+);
 
 export const DashboardV2: React.FC = () => {
   const { user, logout } = useAuthStore();
@@ -55,6 +415,18 @@ export const DashboardV2: React.FC = () => {
   const { data: notes } = useNotes();
   const { data: folders, isLoading: foldersLoading, isError: foldersError, refetch: refetchFolders } = useFolders();
   const { data: tags, isLoading: tagsLoading, isError: tagsError, refetch: refetchTags } = useTags();
+  const { data: documents = [] } = useDocuments();
+  const { data: conversations = [] } = useChatConversations();
+  
+  const {
+    workspaces,
+    activeWorkspaceId,
+    setActiveWorkspaceId,
+    createWorkspace,
+  } = useWorkspaceStore();
+
+  const [showWorkspaceDropdown, setShowWorkspaceDropdown] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -133,12 +505,9 @@ export const DashboardV2: React.FC = () => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-
-  const { data: documents = [] } = useDocuments();
   // Replace raw apiClient.get + useState with React Query hook.
   // Data is served from cache when the search modal opens — no extra network
   // call within the 5-minute staleTime window.
-  const { data: conversations = [] } = useChatConversations();
   const { mutateAsync: createNote } = useCreateNote();
 
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -327,311 +696,291 @@ export const DashboardV2: React.FC = () => {
   };
 
   const renderSidebar = (collapsed: boolean, isMobileView: boolean = false) => {
-    const sidebarItems = [
-      { id: "overview", label: "Overview", icon: LayoutDashboard, color: "text-primary" },
-      { id: "notes", label: "All Notes", icon: FileText, color: "text-amber", resetFilters: true },
-      { id: "chat", label: "AI Chat", icon: BrainCircuit, color: "text-primary" },
-      { id: "documents", label: "Documents", icon: Files, color: "text-emerald" },
-      { id: "flashcards", label: "Flashcards", icon: Layers, color: "text-violet" },
-      { id: "quizzes", label: "Quizzes", icon: GraduationCap, color: "text-rose" },
-      { id: "analytics", label: "Analytics", icon: BarChart3, color: "text-cyan" },
-      { id: "evaluation", label: "Evaluation", icon: ShieldCheck, color: "text-emerald" },
-    ];
-
-    const isItemActive = (item: any) => {
-      if (item.id === "notes") {
-        return activeTab === "notes" && !activeFolderId && !activeTagId;
-      }
-      return activeTab === item.id;
-    };
+    const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+    const activeWorkspaceName = activeWorkspace ? activeWorkspace.name : "Personal Workspace";
 
     return (
-      <div className="flex flex-col justify-between h-full bg-[#FAFCFF] dark:bg-[#03070C] border-r border-border">
-        <div className="flex flex-col overflow-y-auto max-h-[calc(100vh-6rem)] flex-grow scrollbar">
+      <div className="flex flex-col justify-between h-full bg-[#FAFCFF] dark:bg-[#0A0F1C] border-r border-[#111827]/5 dark:border-white/[0.05] relative">
+        <div className="flex flex-col overflow-y-auto max-h-[calc(100vh-6rem)] flex-grow scrollbar pb-4">
           {/* Logo Brand */}
-          <div className="h-14 flex items-center px-4.5 gap-3 border-b border-border shrink-0">
-            <Logo size={32} className="hover:scale-[1.03] transition-transform duration-200 ease-in-out shrink-0" />
-            {(!collapsed || isMobileView) && (
-              <span className="font-bold text-sm tracking-tight text-foreground">
-                NoteAI
-              </span>
-            )}
-          </div>
+          <BrandSection collapsed={collapsed} />
 
-          {/* Workspace Switcher */}
-          {(!collapsed || isMobileView) && (
-            <div className="p-3 border-b border-border shrink-0">
-              <WorkspaceSwitcher />
-            </div>
-          )}
+          {/* Workspace card selector */}
+          <WorkspaceCard
+            collapsed={collapsed}
+            activeWorkspaceName={activeWorkspaceName}
+            docCount={documents?.length ?? 0}
+            noteCount={notes?.length ?? 0}
+            chatCount={conversations?.length ?? 0}
+            onClick={() => setShowWorkspaceDropdown(!showWorkspaceDropdown)}
+          />
 
-          {/* Nav Items */}
-          <nav className="p-3.5 space-y-1 flex-grow">
-            {sidebarItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = isItemActive(item);
-              return (
-                <button
-                  key={item.id}
+          <WorkspaceDropdown
+            isOpen={showWorkspaceDropdown}
+            onClose={() => setShowWorkspaceDropdown(false)}
+            workspaces={workspaces}
+            activeWorkspaceId={activeWorkspaceId}
+            onSelectWorkspace={setActiveWorkspaceId}
+            onCreateWorkspace={createWorkspace}
+          />
+
+          {/* Nav Items Grouped */}
+          <div className="space-y-4.5 mt-4">
+            {/* WORKSPACE GROUP */}
+            <NavigationGroup title="WORKSPACE" collapsed={collapsed}>
+              <NavigationItem
+                label="Overview"
+                icon={LayoutDashboard}
+                isActive={activeTab === "overview"}
+                collapsed={collapsed}
+                onClick={() => {
+                  setActiveTab("overview");
+                  if (isMobileView) setMobileSidebarOpen(false);
+                }}
+              />
+              <NavigationItem
+                label="All Notes"
+                icon={FileText}
+                color="text-amber"
+                isActive={activeTab === "notes" && !activeFolderId && !activeTagId}
+                collapsed={collapsed}
+                onClick={() => {
+                  setActiveTab("notes");
+                  setActiveFolderId(null);
+                  setActiveTagId(null);
+                  if (isMobileView) setMobileSidebarOpen(false);
+                }}
+              />
+              <NavigationItem
+                label="Documents"
+                icon={Files}
+                color="text-emerald"
+                isActive={activeTab === "documents"}
+                collapsed={collapsed}
+                onClick={() => {
+                  setActiveTab("documents");
+                  if (isMobileView) setMobileSidebarOpen(false);
+                }}
+              />
+              
+              {/* Folders Accordion */}
+              <div className="space-y-0.5">
+                <FolderAccordionItem
+                  label="Folders"
+                  icon={Folder}
+                  collapsed={collapsed}
+                  isOpen={expandFolders}
                   onClick={() => {
-                    setActiveTab(item.id as any);
-                    if (item.resetFilters) {
-                      setActiveFolderId(null);
-                      setActiveTagId(null);
+                    if (collapsed && !isMobileView) {
+                      setActiveTab("folders");
+                    } else {
+                      setExpandFolders(!expandFolders);
                     }
-                    if (isMobileView) setMobileSidebarOpen(false);
                   }}
-                  className={`relative flex items-center gap-2.5 w-full px-3 py-2.5 text-[11px] font-semibold rounded-btn transition-all duration-200 group ${
-                    isActive
-                      ? "text-primary bg-primary/10 border border-primary/20"
-                      : "text-secondary-text hover:text-primary-text hover:bg-secondary/70"
-                  }`}
-                >
-                  {isActive && (
-                    <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r bg-primary z-20" />
-                  )}
-                  <span className="relative z-10 flex items-center gap-2.5 w-full">
-                    <Icon className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-102 duration-155 ${isActive ? "text-primary" : item.color}`} />
-                    {(!collapsed || isMobileView) && <span>{item.label}</span>}
-                  </span>
-                </button>
-              );
-            })}
-            <div className="space-y-0.5">
-              <button
-                onClick={() => {
-                  if (collapsed && !isMobileView) {
-                    setActiveTab("folders");
-                  } else {
-                    setExpandFolders(!expandFolders);
-                  }
-                }}
-                className={`flex items-center justify-between w-full px-2.5 py-2 text-[11px] font-semibold rounded-lg text-secondary-text hover:bg-secondary hover:text-primary-text transition-all duration-150`}
-              >
-                <span className="flex items-center gap-2.5">
-                  <Folder className="h-4 w-4 shrink-0 text-primary" />
-                  {(!collapsed || isMobileView) && <span>Folders</span>}
-                </span>
-                {(!collapsed || isMobileView) && (
-                  <ChevronDown
-                    className={`h-3 w-3 transition-transform duration-150 shrink-0 ${
-                      expandFolders ? "" : "-rotate-90"
-                    }`}
-                  />
-                )}
-              </button>
-              {(!collapsed || isMobileView) && expandFolders && (
-                <div className="pl-5 pr-2 py-0.5 space-y-0.5 border-l border-border ml-4">
-                  {foldersLoading ? (
-                    <div className="space-y-1.5 py-1">
-                      <div className="h-2.5 w-16 rounded bg-secondary animate-pulse" />
-                      <div className="h-2.5 w-20 rounded bg-secondary animate-pulse" />
-                    </div>
-                  ) : foldersError ? (
-                    <div className="py-1 px-1 text-[9px] text-red-400 flex items-center justify-between gap-2">
-                      <span>Failed to load</span>
-                      <button
-                        onClick={() => refetchFolders()}
-                        className="text-primary hover:underline font-bold focus:outline-none"
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {folders?.slice(0, 4).map((f) => (
+                />
+                {!collapsed && expandFolders && (
+                  <div className="pl-6 pr-2 py-0.5 space-y-0.5 border-l border-border/60 ml-4.5 text-left">
+                    {foldersLoading ? (
+                      <div className="space-y-1.5 py-1 px-2.5">
+                        <div className="h-2.5 w-16 rounded bg-secondary animate-pulse" />
+                      </div>
+                    ) : foldersError ? (
+                      <div className="py-1 px-2.5 text-[10px] text-red-400">Failed to load</div>
+                    ) : (
+                      <>
+                        {folders?.slice(0, 4).map((f) => (
+                          <button
+                            key={f.id}
+                            onClick={() => {
+                              setActiveFolderId(f.id);
+                              setActiveTab("notes");
+                              if (isMobileView) setMobileSidebarOpen(false);
+                            }}
+                            className={`flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-[12px] font-semibold rounded truncate hover:text-primary transition-colors ${
+                              activeFolderId === f.id ? "text-primary font-bold bg-primary/5" : "text-secondary-text"
+                            }`}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
+                            <span className="truncate">{f.name}</span>
+                          </button>
+                        ))}
                         <button
-                          key={f.id}
                           onClick={() => {
-                            setActiveFolderId(f.id);
+                            setActiveTab("folders");
                             if (isMobileView) setMobileSidebarOpen(false);
                           }}
-                          className={`flex items-center gap-2 w-full text-left px-2 py-1 text-[10px] font-semibold rounded truncate hover:text-primary transition-colors ${
-                            activeFolderId === f.id ? "text-primary bg-primary/5 font-bold" : "text-secondary-text"
-                          }`}
+                          className="w-full text-left px-2.5 py-1.5 text-[11px] text-primary hover:underline font-semibold"
                         >
-                          <span className="w-1 h-1 rounded-full bg-primary/60 shrink-0" />
-                          <span className="truncate">{f.name}</span>
+                          View All...
                         </button>
-                      ))}
-                      <button
-                        onClick={() => {
-                          setActiveTab("folders");
-                          if (isMobileView) setMobileSidebarOpen(false);
-                        }}
-                        className="w-full text-left px-2 py-1 text-[10px] text-primary hover:underline font-semibold"
-                      >
-                        View All...
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Favorites */}
-            <button
-              onClick={() => {
-                setActiveTab("favorites");
-                if (isMobileView) setMobileSidebarOpen(false);
-              }}
-              className={`relative flex items-center gap-2.5 w-full px-2.5 py-2 text-[11px] font-semibold rounded-lg transition-all duration-150 group ${
-                activeTab === "favorites"
-                  ? "text-primary bg-primary/10 border border-primary/20"
-                  : "text-secondary-text hover:text-primary-text hover:bg-secondary"
-              }`}
-            >
-              <span className="relative z-10 flex items-center gap-2.5 w-full">
-                <Star className="h-4 w-4 shrink-0 text-amber" />
-                {(!collapsed || isMobileView) && <span>Favorites</span>}
-              </span>
-            </button>
-
-            {/* Tags Accordion */}
-            <div className="space-y-0.5">
-              <button
-                onClick={() => {
-                  if (collapsed && !isMobileView) {
-                    setActiveTab("tags");
-                  } else {
-                    setExpandTags(!expandTags);
-                  }
-                }}
-                className="flex items-center justify-between w-full px-2.5 py-2 text-[11px] font-semibold text-secondary-text hover:bg-secondary hover:text-primary-text rounded-lg transition-all duration-150"
-              >
-                <span className="flex items-center gap-2.5">
-                  <Tag className="h-4 w-4 shrink-0 text-violet" />
-                  {(!collapsed || isMobileView) && <span>Tags</span>}
-                </span>
-                {(!collapsed || isMobileView) && (
-                  <ChevronDown
-                    className={`h-3 w-3 transition-transform duration-150 shrink-0 ${
-                      expandTags ? "" : "-rotate-90"
-                    }`}
-                  />
+                      </>
+                    )}
+                  </div>
                 )}
-              </button>
-              {(!collapsed || isMobileView) && expandTags && (
-                <div className="pl-5 pr-2 py-0.5 space-y-0.5 border-l border-border ml-4">
-                  {tagsLoading ? (
-                    <div className="space-y-1.5 py-1">
-                      <div className="h-2.5 w-16 rounded bg-secondary animate-pulse" />
-                      <div className="h-2.5 w-20 rounded bg-secondary animate-pulse" />
-                    </div>
-                  ) : tagsError ? (
-                    <div className="py-1 px-1 text-[9px] text-red-400 flex items-center justify-between gap-2">
-                      <span>Failed to load</span>
-                      <button
-                        onClick={() => refetchTags()}
-                        className="text-primary hover:underline font-bold focus:outline-none"
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      {tags?.slice(0, 4).map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => {
-                            setActiveTagId(t.id);
-                            if (isMobileView) setMobileSidebarOpen(false);
-                          }}
-                          className={`flex items-center gap-2 w-full text-left px-2 py-1 text-[10px] font-semibold rounded truncate hover:text-primary transition-colors ${
-                            activeTagId === t.id ? "text-primary bg-primary/5 font-bold" : "text-secondary-text"
-                          }`}
-                        >
-                          <span
-                            style={{ backgroundColor: t.color }}
-                            className="w-1 h-1 rounded-full shrink-0"
-                          />
-                          <span className="truncate">{t.name}</span>
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => {
-                          setActiveTab("tags");
-                          if (isMobileView) setMobileSidebarOpen(false);
-                        }}
-                        className="w-full text-left px-2 py-1 text-[10px] text-primary hover:underline font-semibold"
-                      >
-                        Manage Tags...
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Settings */}
-            <button
-              onClick={() => {
-                setActiveTab("settings");
-                if (isMobileView) setMobileSidebarOpen(false);
-              }}
-              className={`relative flex items-center gap-2.5 w-full px-2.5 py-2 text-[11px] font-semibold rounded-lg transition-all duration-150 group ${
-                activeTab === "settings"
-                  ? "text-primary bg-primary/10 border border-primary/20"
-                  : "text-secondary-text hover:text-primary-text hover:bg-secondary"
-              }`}
-            >
-              <span className="relative z-10 flex items-center gap-2.5 w-full">
-                <Settings className="h-4 w-4 shrink-0 text-secondary-text group-hover:text-primary-text" />
-                {(!collapsed || isMobileView) && <span>Settings</span>}
-              </span>
-            </button>
-          </nav>
-        </div>
-
-        <div className="p-3.5 border-t border-border space-y-3 shrink-0 bg-transparent">
-          {/* User Profile Card */}
-          {(!collapsed || isMobileView) && (
-            <div className="p-2 px-2.5 rounded-xl bg-surface border border-border flex items-center justify-between gap-2.5 shadow-sm">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="h-7 w-7 rounded-full overflow-hidden border border-border flex items-center justify-center bg-secondary shrink-0 shadow-inner">
-                  {user?.avatar_url ? (
-                    <img
-                      src={
-                        user.avatar_url.startsWith("http")
-                          ? user.avatar_url
-                          : `${import.meta.env.VITE_API_BASE_URL}${user.avatar_url}`
-                      }
-                      alt={user.name || "User avatar"}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-[10px] font-bold text-primary">
-                      {user?.name?.slice(0, 2).toUpperCase() || "US"}
-                    </span>
-                  )}
-                </div>
-                <div className="text-left min-w-0">
-                  <h4 className="font-semibold text-[11px] truncate text-primary-text leading-none">
-                    {user?.name || "User"}
-                  </h4>
-                  <p className="text-[9px] text-muted-text truncate mt-0.5 font-medium">
-                    {user?.email}
-                  </p>
-                </div>
               </div>
-            </div>
-          )}
 
-          {/* Theme & Log Out */}
-          <div className="grid grid-cols-2 gap-1.5">
-            <ThemeToggle compact />
-            <button
-              onClick={handleLogout}
-              title="Log Out"
-              className="flex items-center justify-center rounded-lg hover:bg-red-500/10 py-1.5 border border-border text-red-500 transition-colors duration-150"
-            >
-              <LogOut className="h-3.5 w-3.5 shrink-0" />
-            </button>
+              {/* Favorites Link */}
+              <NavigationItem
+                label="Favorites"
+                icon={Star}
+                color="text-amber"
+                isActive={activeTab === "favorites"}
+                collapsed={collapsed}
+                onClick={() => {
+                  setActiveTab("favorites");
+                  if (isMobileView) setMobileSidebarOpen(false);
+                }}
+              />
+
+              {/* Tags Accordion */}
+              <div className="space-y-0.5">
+                <FolderAccordionItem
+                  label="Tags"
+                  icon={Tag}
+                  collapsed={collapsed}
+                  isOpen={expandTags}
+                  onClick={() => {
+                    if (collapsed && !isMobileView) {
+                      setActiveTab("tags");
+                    } else {
+                      setExpandTags(!expandTags);
+                    }
+                  }}
+                />
+                {!collapsed && expandTags && (
+                  <div className="pl-6 pr-2 py-0.5 space-y-0.5 border-l border-border/60 ml-4.5 text-left">
+                    {tagsLoading ? (
+                      <div className="space-y-1.5 py-1 px-2.5">
+                        <div className="h-2.5 w-16 rounded bg-secondary animate-pulse" />
+                      </div>
+                    ) : tagsError ? (
+                      <div className="py-1 px-2.5 text-[10px] text-red-400">Failed to load</div>
+                    ) : (
+                      <>
+                        {tags?.slice(0, 4).map((t) => (
+                          <button
+                            key={t.id}
+                            onClick={() => {
+                              setActiveTagId(t.id);
+                              setActiveTab("notes");
+                              if (isMobileView) setMobileSidebarOpen(false);
+                            }}
+                            className={`flex items-center gap-2 w-full text-left px-2.5 py-1.5 text-[12px] font-semibold rounded truncate hover:text-primary transition-colors ${
+                              activeTagId === t.id ? "text-primary font-bold bg-primary/5" : "text-secondary-text"
+                            }`}
+                          >
+                            <span style={{ backgroundColor: t.color }} className="w-1.5 h-1.5 rounded-full shrink-0" />
+                            <span className="truncate">{t.name}</span>
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => {
+                            setActiveTab("tags");
+                            if (isMobileView) setMobileSidebarOpen(false);
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 text-[11px] text-primary hover:underline font-semibold"
+                        >
+                          Manage Tags...
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </NavigationGroup>
+
+            {/* AI GROUP */}
+            <NavigationGroup title="AI" collapsed={collapsed}>
+              <NavigationItem
+                label="AI Chat"
+                icon={BrainCircuit}
+                isActive={activeTab === "chat"}
+                collapsed={collapsed}
+                onClick={() => {
+                  setActiveTab("chat");
+                  if (isMobileView) setMobileSidebarOpen(false);
+                }}
+              />
+              <NavigationItem
+                label="Flashcards"
+                icon={Layers}
+                color="text-violet"
+                isActive={activeTab === "flashcards"}
+                collapsed={collapsed}
+                onClick={() => {
+                  setActiveTab("flashcards");
+                  if (isMobileView) setMobileSidebarOpen(false);
+                }}
+              />
+              <NavigationItem
+                label="Quizzes"
+                icon={GraduationCap}
+                color="text-rose"
+                isActive={activeTab === "quizzes"}
+                collapsed={collapsed}
+                onClick={() => {
+                  setActiveTab("quizzes");
+                  if (isMobileView) setMobileSidebarOpen(false);
+                }}
+              />
+            </NavigationGroup>
+
+            {/* INSIGHTS GROUP */}
+            <NavigationGroup title="INSIGHTS" collapsed={collapsed}>
+              <NavigationItem
+                label="Analytics"
+                icon={BarChart3}
+                color="text-cyan"
+                isActive={activeTab === "analytics"}
+                collapsed={collapsed}
+                onClick={() => {
+                  setActiveTab("analytics");
+                  if (isMobileView) setMobileSidebarOpen(false);
+                }}
+              />
+              <NavigationItem
+                label="Evaluation"
+                icon={ShieldCheck}
+                color="text-emerald"
+                isActive={activeTab === "evaluation"}
+                collapsed={collapsed}
+                onClick={() => {
+                  setActiveTab("evaluation");
+                  if (isMobileView) setMobileSidebarOpen(false);
+                }}
+              />
+            </NavigationGroup>
+
+            {/* SYSTEM GROUP */}
+            <NavigationGroup title="SYSTEM" collapsed={collapsed}>
+              <NavigationItem
+                label="Settings"
+                icon={Settings}
+                isActive={activeTab === "settings"}
+                collapsed={collapsed}
+                onClick={() => {
+                  setActiveTab("settings");
+                  if (isMobileView) setMobileSidebarOpen(false);
+                }}
+              />
+            </NavigationGroup>
           </div>
         </div>
+
+        {/* Sidebar Footer User Profile */}
+        <UserProfileCard
+          collapsed={collapsed}
+          user={user}
+          showDropdown={showProfileDropdown}
+          onToggleDropdown={() => setShowProfileDropdown(!showProfileDropdown)}
+          onLogout={handleLogout}
+          onSettings={() => setActiveTab("settings")}
+        />
       </div>
     );
   };
+
+
 
   const renderContent = () => {
     switch (activeTab) {
@@ -682,7 +1031,7 @@ export const DashboardV2: React.FC = () => {
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-              className="fixed left-0 top-0 bottom-0 w-60 bg-sidebar border-r border-white/[0.03] flex flex-col justify-between z-50 shadow-2xl"
+              className="fixed left-0 top-0 bottom-0 w-[280px] bg-sidebar border-r border-white/[0.03] flex flex-col justify-between z-50 shadow-2xl"
             >
               {renderSidebar(false, true)}
             </motion.aside>
@@ -693,7 +1042,7 @@ export const DashboardV2: React.FC = () => {
       {/* Desktop Sidebar Navigation */}
       {!isMobile && !isFocusMode && (
         <motion.aside
-          animate={{ width: sidebarCollapsed ? 56 : 220 }}
+          animate={{ width: sidebarCollapsed ? 72 : 280 }}
           transition={{ type: "spring", stiffness: 240, damping: 26 }}
           className="border-r border-white/[0.03] bg-sidebar flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-hidden z-30"
         >
