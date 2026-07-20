@@ -14,6 +14,7 @@ import { Loader } from "../../components/ui/Loader";
 import { TipTapEditor } from "@/components/editor/TipTapEditor";
 import { motion, AnimatePresence } from "framer-motion";
 import { getNotePreview } from "@/lib/utils";
+import { Button, IconButton, DangerButton, AIButton } from "@/components/ui/button";
 
 export const NotesPage: React.FC = () => {
   const {
@@ -735,14 +736,14 @@ export const NotesPage: React.FC = () => {
 
           {/* Create quick button */}
           <div className="p-3 border-t border-border/40 bg-background/10 shrink-0">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+            <Button
               onClick={handleCreateNote}
-              className="flex items-center justify-center gap-2 w-full clay-btn-primary py-3 text-xs font-bold text-white shadow shadow-primary/20 transition-all"
+              variant="primary"
+              className="w-full flex items-center justify-center gap-2"
+              icon={<Plus className="h-4 w-4 text-white" />}
             >
-              <Plus className="h-4.5 w-4.5" /> Create Note
-            </motion.button>
+              Create Note
+            </Button>
           </div>
         </div>
       )}
@@ -774,14 +775,13 @@ export const NotesPage: React.FC = () => {
                 Select an existing note from the side panel or create a new note to start writing.
               </p>
             </div>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+            <Button
               onClick={handleCreateNote}
-              className="clay-btn-primary px-5 py-3 text-xs font-bold text-white hover:bg-primary/95 shadow transition-all"
+              variant="primary"
+              size="md"
             >
               Create Note
-            </motion.button>
+            </Button>
           </motion.div>
         ) : (
           <div className="flex flex-col h-full">
@@ -971,30 +971,34 @@ export const NotesPage: React.FC = () => {
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mr-1 flex items-center gap-1">
                 <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" /> AI Actions:
               </span>
-              <button
+              <AIButton
                 onClick={() => handleNoteAIAction("summarize")}
-                className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold rounded-xl border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-all active:scale-95 cursor-pointer"
+                size="sm"
+                className="h-8 py-0"
               >
                 Summarize
-              </button>
-              <button
+              </AIButton>
+              <AIButton
                 onClick={() => handleNoteAIAction("explain")}
-                className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold rounded-xl border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-all active:scale-95 cursor-pointer"
+                size="sm"
+                className="h-8 py-0"
               >
                 Explain
-              </button>
-              <button
+              </AIButton>
+              <AIButton
                 onClick={() => handleNoteAIAction("flashcards")}
-                className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold rounded-xl border border-violet/20 bg-violet/5 text-violet hover:bg-violet/10 transition-all active:scale-95 cursor-pointer"
+                size="sm"
+                className="h-8 py-0"
               >
                 Study Flashcards
-              </button>
-              <button
+              </AIButton>
+              <AIButton
                 onClick={() => handleNoteAIAction("quiz")}
-                className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold rounded-xl border border-rose/20 bg-rose/5 text-rose hover:bg-rose/10 transition-all active:scale-95 cursor-pointer"
+                size="sm"
+                className="h-8 py-0"
               >
                 Practice Quiz
-              </button>
+              </AIButton>
             </div>
 
             {/* Rich Text Editor */}
@@ -1153,24 +1157,25 @@ export const NotesPage: React.FC = () => {
             <div className="h-4 w-[1px] bg-border/40" />
 
             <div className="flex items-center gap-2">
-              <button
+              <DangerButton
                 onClick={handleBulkDelete}
-                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-red-500/20 bg-red-500/5 text-red-500 hover:bg-red-500/10 transition-all active:scale-95 cursor-pointer"
+                size="sm"
+                icon={<Trash2 className="h-3.5 w-3.5" />}
               >
-                <Trash2 className="h-3.5 w-3.5" />
                 Delete
-              </button>
+              </DangerButton>
 
               {/* Folder move dropdown inside batch bar */}
               <div className="relative">
-                <button
+                <Button
                   onClick={() => setShowBulkFolderDropdown(!showBulkFolderDropdown)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-amber/20 bg-amber/5 text-amber hover:bg-amber/10 transition-all active:scale-95 cursor-pointer"
+                  variant="secondary"
+                  size="sm"
+                  icon={<FolderOpen className="h-3.5 w-3.5 text-amber" />}
                 >
-                  <FolderOpen className="h-3.5 w-3.5" />
                   Move to...
-                  <ChevronDown className="h-3 w-3" />
-                </button>
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
                 <AnimatePresence>
                   {showBulkFolderDropdown && (
                     <motion.div
@@ -1207,14 +1212,15 @@ export const NotesPage: React.FC = () => {
 
               {/* Tag move dropdown inside batch bar */}
               <div className="relative">
-                <button
+                <Button
                   onClick={() => setShowBulkTagDropdown(!showBulkTagDropdown)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border border-purple-500/20 bg-purple-500/5 text-purple-400 hover:bg-purple-500/10 transition-all active:scale-95 cursor-pointer"
+                  variant="secondary"
+                  size="sm"
+                  icon={<span className="flex h-2 w-2 rounded-full bg-purple-500" />}
                 >
-                  <span className="flex h-2 w-2 rounded-full bg-purple-500" />
                   Tag...
-                  <ChevronDown className="h-3 w-3" />
-                </button>
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
                 <AnimatePresence>
                   {showBulkTagDropdown && (
                     <motion.div

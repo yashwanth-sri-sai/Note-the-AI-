@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useUIStore } from "@/store/ui-store";
 import { useDocuments, useUploadDocument, useDeleteDocument, useRetryDocument, DocumentItem } from "@/hooks/useDocuments";
 import { isDocumentReady, isDocumentFailed } from "@/lib/document-status";
+import { Button, IconButton, DangerButton, AIButton } from "@/components/ui/button";
 
 export const DocumentsPage: React.FC = () => {
   const { data: documents = [], isLoading, refetch } = useDocuments();
@@ -404,15 +405,13 @@ export const DocumentsPage: React.FC = () => {
             Manage your knowledge sources for Cited RAG Chat processing.
           </p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+        <IconButton
           onClick={() => refetch()}
-          className="p-2.5 text-muted-foreground hover:text-foreground clay-btn bg-card/45"
           title="Refresh List"
+          className="h-10 w-10 p-0 flex items-center justify-center"
         >
-          <RefreshCw className={`h-4.5 w-4.5 ${isLoading ? "animate-spin text-primary" : ""}`} />
-        </motion.button>
+          <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin text-primary" : ""}`} />
+        </IconButton>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -454,13 +453,14 @@ export const DocumentsPage: React.FC = () => {
               Supports PDF, DOCX, TXT or Markdown files up to 10MB
             </p>
             
-            <motion.button 
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              className="mt-4 flex items-center gap-1.5 px-4 py-2 text-xs font-bold clay-btn-primary"
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<Plus className="h-3.5 w-3.5" />}
+              className="mt-4 pointer-events-none"
             >
-              <Plus className="h-3.5 w-3.5" /> Choose File
-            </motion.button>
+              Choose File
+            </Button>
           </motion.div>
 
           {/* Active Upload Status Feedback */}
@@ -579,15 +579,14 @@ export const DocumentsPage: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-1 text-[10px] text-muted-foreground/80 font-bold">
                           <span>{new Date(doc.created_at).toLocaleDateString()}</span>
-                          <motion.button
-                            whileHover={{ scale: 1.1, rotate: 5 }}
-                            whileTap={{ scale: 0.9 }}
+                          <DangerButton
                             onClick={(e) => { e.stopPropagation(); handleDelete(doc.id, e); }}
-                            className="ml-2.5 p-1.5 text-muted-foreground hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
+                            size="icon"
+                            className="h-8 w-8 ml-2.5 flex items-center justify-center p-0"
                             title="Delete source"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </motion.button>
+                            <Trash2 className="h-4 w-4" />
+                          </DangerButton>
                         </div>
                       </div>
                     </motion.div>
@@ -698,15 +697,17 @@ export const DocumentsPage: React.FC = () => {
             </div>
 
             <div className="pt-4 border-t border-border/40 shrink-0 flex justify-end">
-              <button
+              <AIButton
                 onClick={() => {
                   useUIStore.getState().setActiveTab("chat");
                   setActiveDocPreview(null);
                 }}
-                className="w-full text-center py-2.5 rounded-xl clay-btn-primary text-xs font-bold text-white shadow-md flex items-center justify-center gap-1.5"
+                className="w-full text-center flex items-center justify-center gap-1.5"
+                icon={<ArrowRight className="h-4 w-4 text-white" />}
+                iconPosition="right"
               >
-                Ask AI Questions in Chat <ArrowRight className="h-4 w-4" />
-              </button>
+                Ask AI Questions in Chat
+              </AIButton>
             </div>
           </motion.div>
         )}

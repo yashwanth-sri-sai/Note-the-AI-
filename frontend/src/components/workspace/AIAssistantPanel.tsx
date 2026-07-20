@@ -9,6 +9,7 @@ import { useUIStore } from "@/store/ui-store";
 import { useWorkspaceStore } from "@/store/workspace-store";
 import { apiClient, getAccessToken } from "@/lib/api-client";
 import { EASE_AURORA } from "@/components/motion/MotionSystem";
+import { Button, IconButton, ToolbarButton, AIButton } from "@/components/ui/button";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -382,21 +383,21 @@ export const AIAssistantPanel: React.FC = () => {
 
         <div className="flex items-center gap-1.5">
           {messages.length > 0 && (
-            <button
+            <ToolbarButton
               onClick={handleReset}
               title="Clear conversation"
-              className="p-1.5 rounded-lg hover:bg-foreground/[0.05] text-muted-foreground/60 hover:text-foreground/70 transition-colors"
+              className="h-8 w-8 flex items-center justify-center p-0"
             >
-              <RotateCcw className="h-3 w-3" />
-            </button>
+              <RotateCcw className="h-3.5 w-3.5" />
+            </ToolbarButton>
           )}
-          <button
+          <ToolbarButton
             onClick={toggleAIPanel}
             title="Close AI Panel"
-            className="p-1.5 rounded-lg hover:bg-foreground/[0.05] text-muted-foreground/60 hover:text-foreground/70 transition-colors"
+            className="h-8 w-8 flex items-center justify-center p-0"
           >
-            <X className="h-3.5 w-3.5" />
-          </button>
+            <X className="h-4 w-4" />
+          </ToolbarButton>
         </div>
       </div>
 
@@ -485,17 +486,18 @@ export const AIAssistantPanel: React.FC = () => {
             style={{ height: "24px" }}
             disabled={isLoading}
           />
-          <button
+          <AIButton
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
-            className="h-7 w-7 rounded-lg bg-primary/15 hover:bg-primary/25 border border-primary/25 flex items-center justify-center shrink-0 text-primary disabled:opacity-30 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95 mb-0.5"
+            className="h-7 w-7 rounded-lg flex items-center justify-center shrink-0 mb-0.5 hover:scale-105 active:scale-95"
+            size="sm"
           >
             {isLoading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <Loader2 className="h-3 w-3 animate-spin text-white" />
             ) : (
-              <Send className="h-3 w-3" />
+              <Send className="h-3 w-3 text-white" />
             )}
-          </button>
+          </AIButton>
         </div>
         <p className="text-[9px] text-muted-foreground/35 text-center mt-1.5 font-medium">
           Enter to send · Shift+Enter for new line

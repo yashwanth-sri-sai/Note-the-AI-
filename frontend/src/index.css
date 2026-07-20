@@ -410,3 +410,44 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─── BUTTON DESIGN SYSTEM KEYFRAMES & TOKENS ────────────────────────────── */
+@keyframes aurora-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-aurora {
+  background-size: 200% auto;
+  animation: aurora-flow 4s ease infinite;
+}
+
+.btn-glow-primary {
+  box-shadow: 0 4px 20px -2px rgba(59, 130, 246, 0.3), 
+              0 0 15px 0 rgba(34, 211, 238, 0.15);
+}
+
+.btn-glow-primary:hover {
+  box-shadow: 0 8px 24px -2px rgba(59, 130, 246, 0.45), 
+              0 0 20px 2px rgba(34, 211, 238, 0.25);
+}
+
+.btn-glow-ai {
+  box-shadow: 0 4px 20px -2px rgba(139, 92, 246, 0.3), 
+              0 0 15px 0 rgba(236, 72, 153, 0.15);
+}
+
+.btn-glow-ai:hover {
+  box-shadow: 0 8px 24px -2px rgba(139, 92, 246, 0.45), 
+              0 0 20px 2px rgba(236, 72, 153, 0.25);
+}
+
+.btn-glow-success {
+  box-shadow: 0 4px 15px -2px rgba(16, 185, 129, 0.25);
+}
+
+.btn-glow-success:hover {
+  box-shadow: 0 6px 20px -1px rgba(16, 185, 129, 0.4);
+}
+

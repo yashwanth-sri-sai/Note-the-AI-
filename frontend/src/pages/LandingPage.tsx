@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { Logo } from "@/components/common/Logo";
+import { Button } from "@/components/ui/button";
 
 export const LandingPage: React.FC = () => {
   const { isAuthenticated } = useAuthStore();
@@ -28,23 +29,24 @@ export const LandingPage: React.FC = () => {
             <ThemeToggle compact />
 
             {isAuthenticated ? (
-              <button
+              <Button
                 onClick={() => navigate("/dashboard")}
-                className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/30 hover:bg-primary/95 hover:shadow-primary/45 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                variant="primary"
+                size="sm"
+                icon={<ArrowRight className="h-4 w-4" />}
+                iconPosition="right"
               >
                 Go to Dashboard
-                <ArrowRight className="h-4 w-4" />
-              </button>
+              </Button>
             ) : (
               <div className="flex items-center gap-4">
                 <Link to="/login" className="text-sm font-medium hover:text-primary transition-colors">
                   Log in
                 </Link>
-                <Link
-                  to="/register"
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/25 hover:bg-primary/95 transition-all hover:-translate-y-0.5"
-                >
-                  Sign up
+                <Link to="/register">
+                  <Button variant="primary" size="sm">
+                    Sign up
+                  </Button>
                 </Link>
               </div>
             )}
@@ -72,19 +74,20 @@ export const LandingPage: React.FC = () => {
             A beautiful, friction-free markdown environment for notes, organized by folders and tags, and optimized for upcoming semantic retrieval and flashcards.
           </p>
 
-          <div className="mt-10 flex flex-wrap justify-center gap-4">
-            <button
+          <div className="mt-10 flex flex-wrap justify-center gap-4 items-center">
+            <Button
               onClick={() => navigate(isAuthenticated ? "/dashboard" : "/register")}
-              className="flex items-center gap-2 rounded-xl bg-primary px-8 py-4 text-base font-semibold text-white shadow-xl shadow-primary/35 hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
+              variant="primary"
+              size="lg"
+              icon={<ArrowRight className="h-5 w-5" />}
+              iconPosition="right"
             >
               Get Started Free
-              <ArrowRight className="h-5 w-5" />
-            </button>
-            <a
-              href="#features"
-              className="rounded-xl border border-border px-8 py-4 text-base font-semibold hover:bg-muted/50 transition-colors"
-            >
-              Explore Features
+            </Button>
+            <a href="#features">
+              <Button variant="secondary" size="lg">
+                Explore Features
+              </Button>
             </a>
           </div>
         </div>
